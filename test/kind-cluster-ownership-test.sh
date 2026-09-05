@@ -182,6 +182,9 @@ scripts=(
     "test/exec-via-api-kind-integration.sh:PEIRATES_EXEC_API_KIND_CLUSTER:exec"
     "test/kubectl-try-all-kind-integration.sh:PEIRATES_KUBECTL_TRY_ALL_KIND_CLUSTER:try-all"
     "test/hostpid-breakout-kind-integration.sh:PEIRATES_HOSTPID_BREAKOUT_KIND_CLUSTER:hostpid"
+    "test/container-escape-scan-kind-integration.sh:PEIRATES_CONTAINER_ESCAPE_SCAN_KIND_CLUSTER:escape-scan"
+    "test/docker-socket-breakout-kind-integration.sh:PEIRATES_DOCKER_SOCKET_BREAKOUT_KIND_CLUSTER:docker-socket"
+    "test/hostroot-breakout-kind-integration.sh:PEIRATES_HOSTROOT_BREAKOUT_KIND_CLUSTER:hostroot"
 )
 for item in "${scripts[@]}"; do
     IFS=: read -r script cluster_variable short_name <<<"${item}"

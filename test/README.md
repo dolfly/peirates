@@ -303,3 +303,136 @@ only the disposable Kind node container. The test refuses a pre-existing
 cluster named `peirates-hostpid-breakout-integration`, uses the shared private
 kubeconfig and ownership protections, and deletes only its proven-owned
 cluster. Override the name with `PEIRATES_HOSTPID_BREAKOUT_KIND_CLUSTER`.
+
+## Container escape scan integration test
+
+Run `make container-escape-scan-kind-test` to verify that main-menu item 25
+assesses container escape prerequisites without mutating its Kubernetes,
+nested-Docker, or disposable-node fixtures. The test runs an
+architecture-matched static Peirates binary in three Pods: an unprivileged
+baseline, a container with a read-only mount of the Kind node root, and a
+client connected only to a Docker-in-Docker Unix socket.
+
+Tested behavior:
+
+- Numeric item `25`, canonical command `container-escape-scan`, and alias
+  `escape-scan` all dispatch through the real binary.
+- The baseline reports blocked hostPID, host-root, Docker-socket, and host-proc
+  findings, plus an unsupported cgroup v1 `release_agent` finding when the
+  independently observed fixture uses cgroup v2.
+- The mounted-root fixture reports one available host-root candidate, matching
+  the disposable Kind node root observed outside Peirates.
+- The nested Docker fixture reports a candidate only after its bounded `_ping`
+  and `/version` requests reach the isolated daemon socket.
+- Output includes the read-only/not-proof warning and does not disclose a
+  sentinel environment value or the node marker contents.
+- Before-and-after snapshots prove that no Kubernetes resource, nested Docker
+  container, image, volume, or network is created or removed by any scan and
+  that the node marker remains unchanged.
+
+The test requires Docker, Kind, kubectl, Go, `timeout`, and network access for
+the pinned Kind, BusyBox, and Docker-in-Docker images. It refuses a pre-existing
+cluster named `peirates-container-escape-scan-integration`, uses a private
+kubeconfig plus the shared ownership guard, and deletes only its proven-owned
+cluster. Override the name with
+`PEIRATES_CONTAINER_ESCAPE_SCAN_KIND_CLUSTER`, using a name reserved for this
+test.
+
+No Pod receives a service-account token or RBAC permission. The Kind node
+configuration mounts no physical-host path. The host-root fixture receives
+only the disposable Kind node container's `/` at read-only `/hostroot`; the
+nested daemon shares only an `emptyDir` socket. The test never exposes the
+workstation or CI Docker socket, host procfs, or host cgroup controls.
+
+Kind shares its kernel with its Docker host, so this test does not positively
+exercise the kernel-global cgroup v1 `release_agent` or host `core_pattern`
+techniques. It verifies only their safe detection, blocked, or unsupported
+results. Positive coverage for either technique requires the separately
+approved independent-kernel VM harness described in the container-escape plan.
+
+## Docker socket breakout integration test
+
+Run `make docker-socket-breakout-kind-test` to verify that main-menu item 26
+uses an exposed Docker-compatible Unix socket to enter only an isolated
+Docker-in-Docker daemon container. The test builds and copies an
+architecture-matched static Peirates binary into an unprivileged client
+container that shares `/var/run/docker.sock` with the nested daemon through an
+`emptyDir` volume.
+
+Tested behavior:
+
+- Numeric item `26`, canonical command `docker-socket-breakout`, and alias
+  `docker-breakout` select an exact, already-present local image and reach the
+  nested daemon's root filesystem and PID namespace.
+- Both fixture images declare a non-root default user; the successful path
+  proves Peirates explicitly runs its constrained probe and breakout as root.
+- UID, working directory, daemon-root marker, root device/inode identity, and
+  PID namespace output match observations made independently in the
+  Docker-in-Docker sidecar.
+- A missing socket fails before image selection or container creation.
+- A missing local image returns a Docker API error, explicitly reports that no
+  pull was attempted, and does not appear afterward.
+- An existing image without `chroot` fails inside the constrained validation
+  container before any privileged shell container is started.
+- Every positive and negative invocation leaves no container carrying the
+  Peirates ownership label, and the complete nested image inventory remains
+  unchanged.
+
+The test requires Docker, Kind, kubectl, Go, `timeout`, and network access for
+the pinned Kind and Docker-in-Docker images. Its default nested daemon image is
+`docker:27.5.1-dind`; override it with
+`PEIRATES_DOCKER_SOCKET_DIND_IMAGE` only with a compatible image reserved for
+this disposable test. The usable and no-`chroot` fixture images are imported
+locally from the running DinD image's BusyBox and libraries, so the nested
+daemon performs no registry pull.
+
+The Kind configuration adds no host mount. The client and privileged daemon
+share only an `emptyDir` socket directory: the workstation or CI Docker socket
+and every physical-host path remain inaccessible. Neither container receives a
+service-account token or RBAC permission. The resulting shell controls the
+nested daemon container, not the Kind node or the physical Docker host.
+
+The harness refuses a pre-existing cluster named
+`peirates-docker-socket-breakout-integration`, uses the shared private
+kubeconfig and fail-closed ownership protections, and deletes only its
+proven-owned cluster. Override the name with
+`PEIRATES_DOCKER_SOCKET_BREAKOUT_KIND_CLUSTER`, using a name reserved for this
+test. The EXIT cleanup removes the cluster after checking every
+Peirates-labeled nested container by exact daemon state.
+
+## Mounted host-root breakout integration test
+
+Run `make hostroot-breakout-kind-test` to verify that main-menu item 27 changes
+only an isolated Peirates worker's filesystem root to an existing read-only
+mount of the disposable Kind node root. The test uses an
+architecture-matched static binary and requires no namespace entry or external
+`chroot` executable.
+
+Tested behavior:
+
+- Numeric item `27`, canonical command `hostroot-breakout`, and alias
+  `host-root-breakout` select `/hostroot`, open a shell, and return cleanly
+  after `exit`.
+- Shell UID, working directory, marker contents, and root device/inode identity
+  match state observed independently through Docker before Peirates runs.
+- A root container without `CAP_SYS_CHROOT` fails before a worker starts even
+  though it can read the mounted node root.
+- A privileged container without the mount fails automatic discovery, and `/`
+  is rejected as a substitute for a distinct mounted root.
+- The disposable node marker remains unchanged after every read-only shell
+  check.
+
+The test requires Docker, Kind, kubectl, Go, `timeout`, and network access for
+the pinned Kind and BusyBox images. All Pods disable service-account-token
+mounting and receive no RBAC permissions. The `/hostroot` volume is read-only,
+and the Kind configuration exposes no physical-host path; the shell reaches
+only the disposable Kind node container filesystem and does not enter its PID,
+mount, network, IPC, UTS, user, cgroup, or time namespaces.
+
+The harness refuses a pre-existing cluster named
+`peirates-hostroot-breakout-integration`, uses a private kubeconfig and the
+shared fail-closed ownership guard, and deletes only its proven-owned cluster.
+Override the name with `PEIRATES_HOSTROOT_BREAKOUT_KIND_CLUSTER`, using a name
+reserved for this test. Deleting that disposable cluster also removes the
+fixture marker and every test Pod; the module itself leaves no persistent
+resource to clean up.

@@ -26,6 +26,15 @@ func TestMainSafeModuleHelper(t *testing.T) {
 	launchHostPIDBreakout = func() error {
 		return errors.New("hostPID breakout unavailable in smoke test")
 	}
+	scanContainerEscapes = func() error {
+		return errors.New("container escape scan unavailable in smoke test")
+	}
+	launchDockerSocketBreakout = func() error {
+		return errors.New("Docker socket breakout unavailable in smoke test")
+	}
+	launchHostRootBreakout = func() error {
+		return errors.New("host-root breakout unavailable in smoke test")
+	}
 	// Keep cloud-module smoke tests local and deterministic. These helpers are
 	// used only by code paths that already support dependency injection.
 	awsMetadataBaseURL = "http://127.0.0.1:1"
@@ -71,6 +80,18 @@ func TestMainRunsSafeModulesFromMFlag(t *testing.T) {
 		{"24", "hostPID breakout unavailable in smoke test"},
 		{"host-pid-breakout", "hostPID breakout unavailable in smoke test"},
 		{"breakout-hostpid", "hostPID breakout unavailable in smoke test"},
+		{"container-escape-scan", "container escape scan unavailable in smoke test"},
+		{"25", "container escape scan unavailable in smoke test"},
+		{"escape-scan", "container escape scan unavailable in smoke test"},
+		{"container-escapes", "container escape scan unavailable in smoke test"},
+		{"docker-socket-breakout", "Docker socket breakout unavailable in smoke test"},
+		{"26", "Docker socket breakout unavailable in smoke test"},
+		{"docker-breakout", "Docker socket breakout unavailable in smoke test"},
+		{"dockersock-breakout", "Docker socket breakout unavailable in smoke test"},
+		{"hostroot-breakout", "host-root breakout unavailable in smoke test"},
+		{"27", "host-root breakout unavailable in smoke test"},
+		{"host-root-breakout", "host-root breakout unavailable in smoke test"},
+		{"hostfs-breakout", "host-root breakout unavailable in smoke test"},
 	} {
 		t.Run(test.module, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestMainSafeModuleHelper$")
@@ -175,7 +196,8 @@ func TestMainRunsMenuModulesWithoutTerminalInput(t *testing.T) {
 		"aws-enter-credentials", "aws-assume-role", "aws-s3-ls", "aws-s3-ls-objects",
 		"inject-and-exec", "attack-pod-hostpath-mount", "nodefs-steal-secrets", "bash", "sh",
 		"get-pods", "dump-pod-info", "find-volume-mounts", "list-secrets", "secret-to-sa",
-		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "tcpscan", "enumerate-dns",
+		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "container-escape-scan",
+		"docker-socket-breakout", "hostroot-breakout", "tcpscan", "enumerate-dns",
 		"aws-get-token", "attack-aws-kops-1", "gcp-attack-kops-1", "gcp-get-token", "gcp-attack-kube-env",
 	} {
 		t.Run(module, func(t *testing.T) {
@@ -215,7 +237,8 @@ func TestMainMenuCompletionIncludesEveryCanonicalModule(t *testing.T) {
 		"gcp-attack-kube-env", "attack-kops-gcs-1", "gcp-attack-kops-1",
 		"attack-kops-aws-1", "aws-attack-kops-1", "aws-s3-ls",
 		"aws-s3-ls-objects", "attack-pod-hostpath-mount", "exec-via-api",
-		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "nodefs-steal-secrets", "nodefs-secrets-list",
+		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "container-escape-scan", "docker-socket-breakout",
+		"hostroot-breakout", "nodefs-steal-secrets", "nodefs-secrets-list",
 		"inject-and-exec",
 		"kubectl", "kubectl-try-all", "kubectl-try-all-until-success", "curl",
 		"set-auth-can-i", "tcpscan", "enumerate-dns", "cd", "pwd", "ls", "cat",
@@ -272,6 +295,7 @@ func TestCanonicalModuleCommandsRemainUnchanged(t *testing.T) {
 		"cert-menu", "list-secrets", "secret-to-sa", "find-volume-mounts", "attack-pod-hostpath-mount",
 		"aws-get-token", "gcp-get-token", "gcp-attack-kube-env", "gcp-attack-kops-1", "aws-attack-kops-1",
 		"aws-s3-ls", "aws-s3-ls-objects", "exec-via-api", "exec-via-kubelet", "leakyvessels", "hostpid-breakout",
+		"container-escape-scan", "docker-socket-breakout", "hostroot-breakout",
 		"nodefs-steal-secrets", "nodefs-secrets-list", "inject-and-exec", "curl", "set-auth-can-i", "tcpscan",
 		"enumerate-dns", "bash", "sh", "full", "short", "exit", "quit",
 	} {
@@ -302,5 +326,61 @@ func TestHostPIDBreakoutDispatchFormsUseOneNonPromptingHandler(t *testing.T) {
 	}
 	if launches != 4 {
 		t.Fatalf("hostPID launcher calls = %d, want 4", launches)
+	}
+}
+
+func TestContainerEscapeDispatchFormsUseOneHandler(t *testing.T) {
+	originalScan := scanContainerEscapes
+	originalDocker := launchDockerSocketBreakout
+	originalHostRoot := launchHostRootBreakout
+	t.Cleanup(func() {
+		scanContainerEscapes = originalScan
+		launchDockerSocketBreakout = originalDocker
+		launchHostRootBreakout = originalHostRoot
+	})
+
+	tests := []struct {
+		name     string
+		commands []string
+		install  func(func() error)
+	}{
+		{
+			name:     "scan",
+			commands: []string{"25", "container-escape-scan", "escape-scan", "container-escapes"},
+			install:  func(handler func() error) { scanContainerEscapes = handler },
+		},
+		{
+			name:     "Docker socket",
+			commands: []string{"26", "docker-socket-breakout", "docker-breakout", "dockersock-breakout"},
+			install:  func(handler func() error) { launchDockerSocketBreakout = handler },
+		},
+		{
+			name:     "host root",
+			commands: []string{"27", "hostroot-breakout", "host-root-breakout", "hostfs-breakout"},
+			install:  func(handler func() error) { launchHostRootBreakout = handler },
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			test.install(func() error {
+				calls++
+				return nil
+			})
+			registry := newModuleRegistry(NewSession(ServerInfo{}))
+			for _, command := range test.commands {
+				result, found := registry.Run(canonicalModuleCommand(command))
+				if !found {
+					t.Fatalf("command %q was not registered", command)
+				}
+				if result != modules.Continue {
+					t.Fatalf("command %q result = %v, want Continue", command, result)
+				}
+			}
+			if calls != len(test.commands) {
+				t.Fatalf("handler calls = %d, want %d", calls, len(test.commands))
+			}
+		})
 	}
 }

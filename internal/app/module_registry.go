@@ -115,6 +115,24 @@ func newModuleRegistry(session *Session) *modules.Registry {
 		return modules.Continue
 	}, "hostpid-breakout")
 	registry.Register(func() modules.Result {
+		if err := scanContainerEscapes(); err != nil {
+			fmt.Fprintf(os.Stderr, "[container-escape-scan] %v\n", err)
+		}
+		return modules.Continue
+	}, "container-escape-scan")
+	registry.Register(func() modules.Result {
+		if err := launchDockerSocketBreakout(); err != nil {
+			fmt.Fprintf(os.Stderr, "[docker-socket-breakout] %v\n", err)
+		}
+		return modules.Continue
+	}, "docker-socket-breakout")
+	registry.Register(func() modules.Result {
+		if err := launchHostRootBreakout(); err != nil {
+			fmt.Fprintf(os.Stderr, "[hostroot-breakout] %v\n", err)
+		}
+		return modules.Continue
+	}, "hostroot-breakout")
+	registry.Register(func() modules.Result {
 		println("\nAttempting to steal secrets from the node filesystem - this will return no output if run in a container or if /var/lib/kubelet is inaccessible.\n")
 		gatherPodCredentials(&session.ServiceAccounts, true, true)
 		return modules.Continue

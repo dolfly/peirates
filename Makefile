@@ -30,6 +30,9 @@ KIND_TEST_CASES := \
 	secret-to-sa-kind-test:PEIRATES_SECRET_TO_SA_KIND_CLUSTER:peirates-secret-to-sa-integration:test/secret-to-sa-kind-integration.sh \
 	attack-hostpath-kind-test:PEIRATES_ATTACK_HOSTPATH_KIND_CLUSTER:peirates-attack-hostpath-integration:test/attack-hostpath-kind-integration.sh \
 	hostpid-breakout-kind-test:PEIRATES_HOSTPID_BREAKOUT_KIND_CLUSTER:peirates-hostpid-breakout-integration:test/hostpid-breakout-kind-integration.sh \
+	container-escape-scan-kind-test:PEIRATES_CONTAINER_ESCAPE_SCAN_KIND_CLUSTER:peirates-container-escape-scan-integration:test/container-escape-scan-kind-integration.sh \
+	docker-socket-breakout-kind-test:PEIRATES_DOCKER_SOCKET_BREAKOUT_KIND_CLUSTER:peirates-docker-socket-breakout-integration:test/docker-socket-breakout-kind-integration.sh \
+	hostroot-breakout-kind-test:PEIRATES_HOSTROOT_BREAKOUT_KIND_CLUSTER:peirates-hostroot-breakout-integration:test/hostroot-breakout-kind-integration.sh \
 	exec-via-api-kind-test:PEIRATES_EXEC_API_KIND_CLUSTER:peirates-exec-api-integration:test/exec-via-api-kind-integration.sh \
 	kubectl-try-all-kind-test:PEIRATES_KUBECTL_TRY_ALL_KIND_CLUSTER:peirates-kubectl-try-all-integration:test/kubectl-try-all-kind-integration.sh \
 	curl-kind-test:PEIRATES_CURL_KIND_CLUSTER:peirates-curl-integration:test/curl-kind-integration.sh
@@ -121,6 +124,15 @@ attack-hostpath-kind-test:
 
 hostpid-breakout-kind-test:
 	GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) ./test/hostpid-breakout-kind-integration.sh
+
+container-escape-scan-kind-test:
+	GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) ./test/container-escape-scan-kind-integration.sh
+
+docker-socket-breakout-kind-test:
+	GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) ./test/docker-socket-breakout-kind-integration.sh
+
+hostroot-breakout-kind-test:
+	GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) ./test/hostroot-breakout-kind-integration.sh
 
 exec-via-api-kind-test:
 	GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) ./test/exec-via-api-kind-integration.sh

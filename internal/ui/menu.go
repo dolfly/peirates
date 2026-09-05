@@ -72,6 +72,9 @@ Compromise |
 [22] Run a token-dumping command in all pods via Kubelets (authorization permitting) [exec-via-kubelet]
 [23] Use CVE-2024-21626 (Leaky Vessels) to get a shell on the host (runc versions <1.12) [leakyvessels] *
 [24] Enter the node from a privileged hostPID container [hostpid-breakout]
+[25] Scan this container for known escape prerequisites [container-escape-scan]
+[26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
+[27] Enter an already-mounted host root filesystem [hostroot-breakout]
 -------------+
 Node Attacks |
 -------------+

@@ -78,6 +78,9 @@ Compromise |
 [22] Run a token-dumping command in all pods via Kubelets (authorization permitting) [exec-via-kubelet]
 [23] Use CVE-2024-21626 (Leaky Vessels) to get a shell on the host (runc versions <1.12) [leakyvessels] *
 [24] Enter the node from a privileged hostPID container [hostpid-breakout]
+[25] Scan this container for known escape prerequisites [container-escape-scan]
+[26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
+[27] Enter an already-mounted host root filesystem [hostroot-breakout]
 -------------+
 Node Attacks |
 -------------+
@@ -266,6 +269,18 @@ func setUpCompletionMainMenu() *readline.PrefixCompleter {
 		readline.PcItem("leakyvessels"),
 		// [24] Enter the node from a privileged hostPID container [hostpid-breakout]
 		readline.PcItem("hostpid-breakout"),
+		// [25] Scan this container for known escape prerequisites [container-escape-scan]
+		readline.PcItem("container-escape-scan"),
+		readline.PcItem("escape-scan"),
+		readline.PcItem("container-escapes"),
+		// [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
+		readline.PcItem("docker-socket-breakout"),
+		readline.PcItem("docker-breakout"),
+		readline.PcItem("dockersock-breakout"),
+		// [27] Enter an already-mounted host root filesystem [hostroot-breakout]
+		readline.PcItem("hostroot-breakout"),
+		readline.PcItem("host-root-breakout"),
+		readline.PcItem("hostfs-breakout"),
 		// [30] Steal secrets from the node filesystem [nodefs-steal-secrets]
 		readline.PcItem("nodefs-steal-secrets"),
 		// [31] List secrets already gathered from the node filesystem

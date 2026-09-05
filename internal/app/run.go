@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 
 	"github.com/inguardians/peirates/internal/modules/hostpid"
+	"github.com/inguardians/peirates/internal/modules/hostroot"
 )
 
 // Entrypoints contains the process modes selected by RunArgs.
 type Entrypoints struct {
-	Peirates      func()
-	Kubectl       func()
-	HostPIDWorker func([]string)
+	Peirates       func()
+	Kubectl        func()
+	HostPIDWorker  func([]string)
+	HostRootWorker func([]string)
 }
 
 // Run starts Peirates using the current process arguments.
@@ -21,6 +23,9 @@ func Run() {
 		Kubectl:  ExecKubectlAndExit,
 		HostPIDWorker: func(args []string) {
 			os.Exit(hostpid.RunWorker(args, os.Stdin, os.Stdout, os.Stderr))
+		},
+		HostRootWorker: func(args []string) {
+			os.Exit(hostroot.RunWorker(args, os.Stdin, os.Stdout, os.Stderr))
 		},
 	})
 }
@@ -33,6 +38,10 @@ func RunArgs(args []string, entrypoints Entrypoints) {
 	os.Args = args
 	if len(os.Args) > 1 && os.Args[1] == hostpid.WorkerArgument {
 		entrypoints.HostPIDWorker(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == hostroot.WorkerArgument {
+		entrypoints.HostRootWorker(os.Args[2:])
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--kubectl" {
