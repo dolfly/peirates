@@ -81,6 +81,7 @@ Compromise |
 [25] Scan this container for known escape prerequisites [container-escape-scan]
 [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
 [27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
+[29] Enter the host through a writable host core_pattern [hostproc-core-pattern-breakout]
 -------------+
 Node Attacks |
 -------------+
@@ -281,6 +282,8 @@ func setUpCompletionMainMenu() *readline.PrefixCompleter {
 		readline.PcItem("hostroot-breakout"),
 		readline.PcItem("host-root-breakout"),
 		readline.PcItem("hostfs-breakout"),
+		// [29] Enter the host through a writable host core_pattern [hostproc-core-pattern-breakout]
+		readline.PcItem("hostproc-core-pattern-breakout"),
 		// [30] Steal secrets from the node filesystem [nodefs-steal-secrets]
 		readline.PcItem("nodefs-steal-secrets"),
 		// [31] List secrets already gathered from the node filesystem

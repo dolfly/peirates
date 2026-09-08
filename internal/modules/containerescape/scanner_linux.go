@@ -401,33 +401,23 @@ func probeCorePattern(system scannerSystem, facts scanFacts) escapeutil.Finding 
 		finding.Summary = "procfs mounts could not be inspected"
 		return finding
 	}
-	var writableHostProc int
+	var writableProc int
 	for _, mount := range escapeutil.MountsByType(facts.mounts, "proc") {
-		pidOneRoot, rootErr := system.identity(filepath.Join(mount.MountPoint, "1/root"))
-		if rootErr != nil || facts.root.err != nil || pidOneRoot.Equal(facts.root.identity) {
-			continue
-		}
 		if system.access(filepath.Join(mount.MountPoint, "sys/kernel/core_pattern"), unix.W_OK) == nil {
-			writableHostProc++
+			writableProc++
 		}
 	}
 	var blockers []string
-	if writableHostProc == 0 {
-		blockers = append(blockers, "no distinct PID-1 procfs candidate has writable core_pattern")
+	if writableProc == 0 {
+		blockers = append(blockers, "no procfs mount exposes writable core_pattern")
 	} else {
-		finding.Evidence = append(finding.Evidence, fmt.Sprintf("%d distinct PID-1 procfs candidate(s) expose writable core_pattern", writableHostProc))
-	}
-	upperDirs := escapeutil.OverlayUpperDirs(facts.mounts)
-	if len(upperDirs) == 0 {
-		blockers = append(blockers, "no host-visible overlay upperdir could be derived")
-	} else {
-		finding.Evidence = append(finding.Evidence, fmt.Sprintf("%d overlay upperdir path candidate(s) derived", len(upperDirs)))
+		finding.Evidence = append(finding.Evidence, fmt.Sprintf("%d procfs mount(s) expose writable core_pattern", writableProc))
 	}
 	if len(blockers) != 0 {
 		return finishFinding(finding, blockers, "")
 	}
 	finding.Status = escapeutil.StatusCandidate
-	finding.Summary = "observable core_pattern prerequisites are present on a distinct PID-1 procfs candidate; kernel-global mutation is required to prove whether it is host procfs"
+	finding.Summary = "a procfs mount exposes writable core_pattern; a temporary kernel-global mutation is required to exercise the action"
 	return finding
 }
 

@@ -11,7 +11,7 @@ var mainMenuCommands = []string{
 	"aws-attack-kops-1", "aws-s3-ls", "aws-s3-ls-objects", "attack-pod-hostpath-mount", "exec-via-api",
 	"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "container-escape-scan", "escape-scan", "container-escapes",
 	"docker-socket-breakout", "docker-breakout", "dockersock-breakout", "hostroot-breakout", "host-root-breakout", "hostfs-breakout",
-	"nodefs-steal-secrets", "nodefs-secrets-list", "inject-and-exec", "kubectl",
+	"hostproc-core-pattern-breakout", "nodefs-steal-secrets", "nodefs-secrets-list", "inject-and-exec", "kubectl",
 	"kubectl-try-all-until-success", "kubectl-try-all", "curl", "set-auth-can-i", "tcpscan", "enumerate-dns",
 	"cd", "pwd", "ls", "cat", "shell", "short", "full", "outputfile", "exit",
 }

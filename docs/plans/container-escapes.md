@@ -1,6 +1,6 @@
 # Container escape expansion plan
 
-Status: **APPROVED** on 2026-09-04. Implementation is authorized for commands 25–27. Commands 28–29 remain detection-only until separately approved with an independent-kernel VM harness.
+Status: **APPROVED** on 2026-09-04 for commands 25–27. On 2026-09-08, command 29 was separately authorized for implementation with the safety contract below; its dedicated positive test remains deferred until an independent-kernel VM harness is available. Command 28 remains detection-only.
 
 The planning agent reviewed all 114 slides in the [Black Hat USA 2019 Compendium of Container Escapes](https://i.blackhat.com/USA-19/Thursday/us-19-Edwards-Compendium-Of-Container-Escapes-up.pdf) and inspected the existing `hostpid-breakout` implementation before producing this plan.
 
@@ -14,7 +14,8 @@ Add three commands:
 | 26 | `docker-socket-breakout` | Enter the host controlled by an exposed Docker daemon |
 | 27 | `hostroot-breakout` | Chroot into an already-mounted host filesystem |
 
-Reserve two experimental commands, but initially expose them only as scan findings:
+The initial scope reserved two experimental commands as scan findings. Command
+29 was subsequently authorized as described in the status amendment above:
 
 | Reserved | Command | Reason |
 |---:|---|---|
@@ -142,7 +143,8 @@ A successful positive test must run in a disposable VM with an independent kerne
 
 ### Host-proc `core_pattern`
 
-Also detection-only initially. A future implementation would require:
+Initially detection-only, this action was separately authorized on 2026-09-08
+with these mandatory constraints:
 
 - Positively identified host procfs.
 - A host-visible payload.
@@ -152,7 +154,17 @@ Also detection-only initially. A future implementation would require:
 - A disposable child as the only crashed process.
 - An independent-kernel VM test harness.
 
-This must not be positively exercised in Kind because `core_pattern` is kernel-global.
+The implementation must not add a reverse shell or persistence. Its dedicated
+positive test is intentionally deferred, and the action must not be exercised
+in Kind because `core_pattern` is kernel-global.
+
+The implemented payload path uses the kernel's initial-namespace PID expansion:
+`/bin/sh` reads the temporary handler through `/proc/%P/root`. This avoids an
+unnecessary dependency on reading PID 1's root or deriving an overlay
+`upperdir`; the random handler and both FIFOs remain tied to the disposable
+crash worker's filesystem root. The private worker replaces itself with the
+current container's `/bin/sh` before self-signalling with `SIGSEGV`, preventing
+the Go runtime from turning the intended fatal signal into a normal exit.
 
 ## Explicit exclusions
 
@@ -177,13 +189,13 @@ internal/modules/escapeutil
 internal/modules/containerescape
 internal/modules/dockersocket
 internal/modules/hostroot
+internal/modules/hostproc
 ```
 
 Possible future packages:
 
 ```text
 internal/modules/cgrouprelease
-internal/modules/hostproc
 ```
 
 Shared `escapeutil` responsibilities:
@@ -224,6 +236,7 @@ Documentation:
 - `docs/commands/container-escape-scan.md`
 - `docs/commands/docker-socket-breakout.md`
 - `docs/commands/hostroot-breakout.md`
+- `docs/commands/hostproc-core-pattern-breakout.md`
 - `docs/commands/README.md`
 - `docs/commands/manifest.tsv`
 - `test/README.md`
@@ -323,7 +336,8 @@ For `ldd`, the expected result is “not a dynamic executable” or equivalent. 
 ## Approved decisions
 
 1. Implement only commands 25–27 initially.
-2. Keep items 28–29 detection-only until an independent-kernel VM harness exists.
+2. Keep item 28 detection-only. Item 29 was separately approved on 2026-09-08;
+   defer its dedicated positive test until an independent-kernel VM harness exists.
 3. Keep `hostroot-breakout` filesystem-only.
 4. Require a pre-existing Docker image and prohibit automatic pulls.
 5. Use existing stdin prompting conventions in direct `-m` mode rather than adding global flags.

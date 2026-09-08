@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/inguardians/peirates/internal/modules/hostpid"
+	"github.com/inguardians/peirates/internal/modules/hostproc"
 	"github.com/inguardians/peirates/internal/modules/hostroot"
 )
 
@@ -14,6 +15,7 @@ type Entrypoints struct {
 	Kubectl        func()
 	HostPIDWorker  func([]string)
 	HostRootWorker func([]string)
+	HostProcWorker func([]string)
 }
 
 // Run starts Peirates using the current process arguments.
@@ -26,6 +28,9 @@ func Run() {
 		},
 		HostRootWorker: func(args []string) {
 			os.Exit(hostroot.RunWorker(args, os.Stdin, os.Stdout, os.Stderr))
+		},
+		HostProcWorker: func(args []string) {
+			os.Exit(hostproc.RunCrashWorker(args, os.Stderr))
 		},
 	})
 }
@@ -42,6 +47,10 @@ func RunArgs(args []string, entrypoints Entrypoints) {
 	}
 	if len(os.Args) > 1 && os.Args[1] == hostroot.WorkerArgument {
 		entrypoints.HostRootWorker(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == hostproc.CrashWorkerArgument {
+		entrypoints.HostProcWorker(os.Args[2:])
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--kubectl" {

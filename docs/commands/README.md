@@ -44,6 +44,7 @@ Commands can normally be selected interactively by number, canonical name, or al
 | 25 | `container-escape-scan` | [Scan for container escape prerequisites](container-escape-scan.md) |
 | 26 | `docker-socket-breakout` | [Enter a host through an exposed Docker socket](docker-socket-breakout.md) |
 | 27 | `hostroot-breakout` | [Chroot a shell into an already-mounted host root filesystem](hostroot-breakout.md) |
+| 29 | `hostproc-core-pattern-breakout` | [Enter a host through a writable host core pattern](hostproc-core-pattern-breakout.md) |
 | 30 | `nodefs-steal-secrets` | [Collect credentials from the node filesystem](nodefs-steal-secrets.md) |
 
 ## General utilities

@@ -75,6 +75,7 @@ Compromise |
 [25] Scan this container for known escape prerequisites [container-escape-scan]
 [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
 [27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
+[29] Enter the host through a writable host core_pattern [hostproc-core-pattern-breakout]
 -------------+
 Node Attacks |
 -------------+

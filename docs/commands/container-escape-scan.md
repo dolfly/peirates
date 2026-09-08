@@ -84,12 +84,13 @@ The scan emits one result for each reviewed technique:
   through an exposed Docker-compatible daemon;
 - `cgroup-release-agent-breakout`: cgroup v1 `release_agent`, detection only;
   and
-- `hostproc-core-pattern-breakout`: writable `core_pattern` on a procfs whose
-  visible PID 1 root differs from the container root, detection only. This is
-  a host-procfs candidate rather than proof.
+- `hostproc-core-pattern-breakout`: writable `core_pattern` exposed by a procfs
+  mount. This remains a kernel-global candidate rather than proof that the
+  action will succeed or reach the intended host.
 
-The cgroup and core-pattern techniques remain assessment-only. There is no
-Peirates action command for either kernel-global mechanism.
+The cgroup technique remains assessment-only. The core-pattern action is a
+separate, explicitly confirmed command; the scanner itself remains read-only
+and never invokes it.
 
 ## Finding statuses
 
@@ -155,8 +156,9 @@ independently before using an action module.
   another LSM; a positive check is not proof that a write would succeed.
 - Overlay `upperdir` values are host-path candidates derived from mount
   metadata. Their presence does not prove that a payload path is host-visible.
-- A distinct visible-PID-1 root on a procfs mount is only a host-procfs
-  candidate; the read-only scan cannot prove which machine owns that procfs.
+- A writable `core_pattern` is kernel-global, but the read-only scan cannot
+  prove that the initial-namespace handler will start or identify which
+  physical machine owns that kernel.
 - Runtime CVEs, kernel-memory exploits, device manipulation, module loading,
   and persistence mechanisms are intentionally outside this scanner's scope.
 
