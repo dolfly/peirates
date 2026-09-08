@@ -57,13 +57,30 @@ docker-breakout
 dockersock-breakout
 ```
 
-Peirates first prompts for the socket. An empty line selects
-`/var/run/docker.sock`. It then reports the daemon and tagged local images and
-prompts for the exact image reference:
+Peirates first lists the direct Unix sockets currently available among a Unix
+`DOCKER_HOST` path and Docker's conventional `/run/docker.sock` and
+`/var/run/docker.sock` paths. Missing paths, non-sockets, and symbolic links
+are omitted. It then prompts for the socket. The list is advisory: you can
+still enter another absolute path, and an empty line still selects
+`/var/run/docker.sock`. After probing the selected socket, Peirates reports the
+daemon and tagged local images and prompts for the exact image reference. In an
+interactive terminal, press Tab to complete one of those discovered local image
+names. Completion is advisory, so you can still type another reference
+manually:
 
 ```text
+Available Docker socket paths:
+- /var/run/docker.sock
 Docker socket path [/var/run/docker.sock]:
 Existing image reference (must contain /bin/sh and chroot):
+```
+
+When none of the candidates is a direct Unix socket, the interaction instead
+starts deterministically with:
+
+```text
+Available Docker socket paths: none found
+Docker socket path [/var/run/docker.sock]:
 ```
 
 One-shot module mode still reads both choices and then shell input from
@@ -101,8 +118,9 @@ Peirates performs the following sequence:
    enables `no-new-privileges`, overrides the image user with UID/GID 0, and
    runs only a `/bin/sh` check for `chroot`. Peirates waits for it and removes
    it by exact ID.
-5. It creates a second uniquely named and labeled container with a TTY, open
-   stdin, UID/GID 0, `Privileged: true`, `PidMode: host`, and `/:/host:rw`.
+5. It reports `Creating a privileged container from IMAGE...`, then creates a
+   second uniquely named and labeled container with a TTY, open stdin, UID/GID
+   0, `Privileged: true`, `PidMode: host`, and `/:/host:rw`.
 6. With a real terminal, the new container executes
    `chroot /host /bin/sh -i` in Docker TTY mode. Peirates forwards terminal
    resize events and restores local terminal settings on every return path.

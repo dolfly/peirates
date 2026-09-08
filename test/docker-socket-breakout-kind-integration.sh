@@ -254,6 +254,9 @@ run_positive_case() {
     assert_contains "${output}" "${usable_image}" "${module} local image"
     assert_contains "${output}" "may be nested or remote" "${module} target caveat"
     assert_contains "${output}" \
+        "Creating a privileged container from ${usable_image}..." \
+        "${module} privileged-container status"
+    assert_contains "${output}" \
         "Entering the Docker daemon host filesystem; exit returns to Peirates." \
         "${module} shell boundary"
     assert_contains "${output}" "DOCKERSOCK_UID=0" "${module} UID"

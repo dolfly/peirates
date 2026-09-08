@@ -512,7 +512,8 @@ func TestLaunchCreatesAttachedOwnedShellAndCleansExactIDs(t *testing.T) {
 		!strings.Contains(stdout.String(), daemon.attachOutput) {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "may be nested or remote") {
+	if !strings.Contains(stderr.String(), "may be nested or remote") ||
+		!strings.Contains(stderr.String(), "Creating a privileged container from fixture:latest...") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 	makeRawCalls, restoreCalls, sizeCalls := terminal.counts()

