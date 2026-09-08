@@ -74,7 +74,7 @@ Compromise |
 [24] Enter the node from a privileged hostPID container [hostpid-breakout]
 [25] Scan this container for known escape prerequisites [container-escape-scan]
 [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
-[27] Enter an already-mounted host root filesystem [hostroot-breakout]
+[27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
 -------------+
 Node Attacks |
 -------------+

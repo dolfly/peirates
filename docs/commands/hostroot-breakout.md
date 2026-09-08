@@ -9,8 +9,9 @@
 
 ## Purpose
 
-Change an isolated Peirates worker's filesystem root to an already-mounted host
-root and open an interactive `/bin/sh`. This is useful when an authorized
+Chroot a shell into an already-mounted host root filesystem. Peirates does this
+by changing an isolated worker's filesystem root and opening an interactive
+`/bin/sh`. This is useful when an authorized
 operator finds a container that can see the node filesystem through a mount
 such as `/hostroot` and has the privilege needed to call `chroot`.
 

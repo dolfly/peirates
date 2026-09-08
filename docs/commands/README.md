@@ -43,7 +43,7 @@ Commands can normally be selected interactively by number, canonical name, or al
 | 24 | `hostpid-breakout` | [Enter a node from a privileged hostPID container](hostpid-breakout.md) |
 | 25 | `container-escape-scan` | [Scan for container escape prerequisites](container-escape-scan.md) |
 | 26 | `docker-socket-breakout` | [Enter a host through an exposed Docker socket](docker-socket-breakout.md) |
-| 27 | `hostroot-breakout` | [Enter an already-mounted host root](hostroot-breakout.md) |
+| 27 | `hostroot-breakout` | [Chroot a shell into an already-mounted host root filesystem](hostroot-breakout.md) |
 | 30 | `nodefs-steal-secrets` | [Collect credentials from the node filesystem](nodefs-steal-secrets.md) |
 
 ## General utilities

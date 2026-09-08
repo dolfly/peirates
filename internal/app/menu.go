@@ -80,7 +80,7 @@ Compromise |
 [24] Enter the node from a privileged hostPID container [hostpid-breakout]
 [25] Scan this container for known escape prerequisites [container-escape-scan]
 [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
-[27] Enter an already-mounted host root filesystem [hostroot-breakout]
+[27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
 -------------+
 Node Attacks |
 -------------+
@@ -94,7 +94,7 @@ Off-Menu         +
 [91] Make an HTTP request (GET or POST) to a user-specified URL [curl]
 [92] Deactivate "auth can-i" checking before attempting actions [set-auth-can-i] 
 [93] Run a simple all-ports TCP port scan against an IP address [tcpscan]
-[94] Enumerate services via DNS [enumerate-dns] *
+[94] Enumerate services via DNS (for CoreDNS version < 1.9.0) [enumerate-dns] *
 [] Manipulate the filesystem [ cd , pwd , ls , cat ]
 []  Run a shell command [shell <command and arguments>]
 []  Run a Bash or Bourne shell [bash or sh]
@@ -277,7 +277,7 @@ func setUpCompletionMainMenu() *readline.PrefixCompleter {
 		readline.PcItem("docker-socket-breakout"),
 		readline.PcItem("docker-breakout"),
 		readline.PcItem("dockersock-breakout"),
-		// [27] Enter an already-mounted host root filesystem [hostroot-breakout]
+		// [27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
 		readline.PcItem("hostroot-breakout"),
 		readline.PcItem("host-root-breakout"),
 		readline.PcItem("hostfs-breakout"),
