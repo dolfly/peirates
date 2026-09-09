@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proc-sys-kernel
+spec:
+  containers:
+  - image: nginx
+    name: proc-sys-kernel
+    volumeMounts:
+    - name: hostroot
+      mountPath: /mnt
+  volumes:
+  - name: hostroot
+    hostPath:
+      path: /proc/
+      type: Directory
