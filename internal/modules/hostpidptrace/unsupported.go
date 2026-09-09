@@ -9,6 +9,8 @@ import (
 
 func probePlatform(context.Context) (ProbeResult, error) { return ProbeResult{}, ErrUnsupported }
 
-func launchWorker(context.Context, RunOptions) (Result, error) { return Result{}, ErrUnsupported }
+func launchInteractive(context.Context, Candidate, io.Reader, io.Writer, int) (Result, error) {
+	return Result{}, ErrUnsupported
+}
 
 func runWorker(io.Reader, io.Writer) error { return ErrUnsupported }

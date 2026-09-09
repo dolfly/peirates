@@ -5,7 +5,6 @@ package hostpidptrace
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -34,7 +33,6 @@ type mutationStage uint8
 
 const (
 	stageQualified mutationStage = iota
-	stageOutputCreated
 	stageTargetSeized
 	stageTargetStopped
 	stageTargetPatched
@@ -44,14 +42,13 @@ const (
 	stageTargetDetached
 	stageChildExeced
 	stageChildReaped
-	stageOutputRemoved
 )
 
 func (stage mutationStage) String() string {
 	names := [...]string{
-		"qualified", "output-created", "target-seized", "target-stopped",
+		"qualified", "target-seized", "target-stopped",
 		"target-patched", "child-created", "child-contained", "target-restored",
-		"target-detached", "child-execed", "child-reaped", "output-removed",
+		"target-detached", "child-execed", "child-reaped",
 	}
 	if int(stage) >= len(names) {
 		return "unknown"
@@ -138,7 +135,10 @@ func (unixTracePlatform) pidfdKill(pidfd int) error {
 func (unixTracePlatform) close(fd int) error { return unix.Close(fd) }
 
 func (unixTracePlatform) wait(ctx context.Context, pid int, timeout time.Duration) (waitResult, error) {
-	deadline := time.Now().Add(timeout)
+	var deadline time.Time
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
 	for {
 		var status unix.WaitStatus
 		waited, err := unix.Wait4(pid, &status, unix.WNOHANG|unix.WALL, nil)
@@ -151,121 +151,10 @@ func (unixTracePlatform) wait(ctx context.Context, pid int, timeout time.Duratio
 		if err := ctx.Err(); err != nil {
 			return waitResult{}, err
 		}
-		if time.Now().After(deadline) {
+		if !deadline.IsZero() && time.Now().After(deadline) {
 			return waitResult{}, context.DeadlineExceeded
 		}
 		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-type outputArtifact struct {
-	rootFD int
-	tmpFD  int
-	fileFD int
-	name   string
-	id     Identity
-}
-
-func createOutputArtifact(pid int, expectedRoot Identity) (*outputArtifact, error) {
-	artifact := &outputArtifact{rootFD: -1, tmpFD: -1, fileFD: -1}
-	var err error
-	artifact.rootFD, err = unix.Open(fmt.Sprintf("/proc/%d/root", pid), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, fmt.Errorf("open target root: %w", err)
-	}
-	var rootStat unix.Stat_t
-	if err = unix.Fstat(artifact.rootFD, &rootStat); err != nil {
-		artifact.close()
-		return nil, fmt.Errorf("inspect opened target root: %w", err)
-	}
-	if (Identity{Device: uint64(rootStat.Dev), Inode: rootStat.Ino}) != expectedRoot {
-		artifact.close()
-		return nil, errors.New("target root identity changed before output creation")
-	}
-	artifact.tmpFD, err = unix.Openat(artifact.rootFD, "tmp", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		artifact.close()
-		return nil, fmt.Errorf("open target /tmp: %w", err)
-	}
-	for attempts := 0; attempts < 8; attempts++ {
-		var random [16]byte
-		if _, err = rand.Read(random[:]); err != nil {
-			artifact.close()
-			return nil, fmt.Errorf("generate capture name: %w", err)
-		}
-		artifact.name = fmt.Sprintf(".peirates-ptrace-%x", random[:])
-		artifact.fileFD, err = unix.Openat(artifact.tmpFD, artifact.name,
-			unix.O_CREAT|unix.O_EXCL|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
-		if errors.Is(err, unix.EEXIST) {
-			continue
-		}
-		if err != nil {
-			artifact.close()
-			return nil, fmt.Errorf("create target capture file: %w", err)
-		}
-		var stat unix.Stat_t
-		if err = unix.Fstat(artifact.fileFD, &stat); err != nil {
-			artifact.close()
-			return nil, fmt.Errorf("inspect capture file: %w", err)
-		}
-		artifact.id = Identity{Device: uint64(stat.Dev), Inode: stat.Ino}
-		return artifact, nil
-	}
-	artifact.close()
-	return nil, errors.New("could not allocate a unique target capture file")
-}
-
-func (artifact *outputArtifact) hostPath() string { return "/tmp/" + artifact.name }
-
-func (artifact *outputArtifact) read(limit int64) ([]byte, bool, error) {
-	data := make([]byte, int(limit+1))
-	offset := 0
-	for offset < len(data) {
-		count, err := unix.Pread(artifact.fileFD, data[offset:], int64(offset))
-		offset += count
-		if errors.Is(err, unix.EINTR) {
-			continue
-		}
-		if err != nil {
-			return nil, false, err
-		}
-		if count == 0 {
-			break
-		}
-	}
-	data = data[:offset]
-	if int64(len(data)) > limit {
-		return data[:limit], true, nil
-	}
-	return data, false, nil
-}
-
-func (artifact *outputArtifact) remove() error {
-	var retained unix.Stat_t
-	if err := unix.Fstat(artifact.fileFD, &retained); err != nil {
-		return fmt.Errorf("inspect retained capture file: %w", err)
-	}
-	var current unix.Stat_t
-	if err := unix.Fstatat(artifact.tmpFD, artifact.name, &current, unix.AT_SYMLINK_NOFOLLOW); err != nil {
-		return fmt.Errorf("inspect capture path before removal: %w", err)
-	}
-	retainedID := Identity{Device: uint64(retained.Dev), Inode: retained.Ino}
-	currentID := Identity{Device: uint64(current.Dev), Inode: current.Ino}
-	if retainedID != artifact.id || currentID != artifact.id {
-		return errors.New("capture path identity changed; refusing to unlink it")
-	}
-	if err := unix.Unlinkat(artifact.tmpFD, artifact.name, 0); err != nil {
-		return fmt.Errorf("remove capture file: %w", err)
-	}
-	return nil
-}
-
-func (artifact *outputArtifact) close() {
-	for _, fd := range []*int{&artifact.fileFD, &artifact.tmpFD, &artifact.rootFD} {
-		if *fd >= 0 {
-			_ = unix.Close(*fd)
-			*fd = -1
-		}
 	}
 }
 
@@ -273,12 +162,10 @@ type payloadLayout struct {
 	data        []byte
 	name        uint64
 	root        uint64
-	null        uint64
-	output      uint64
+	terminal    uint64
 	shell       uint64
 	argv        uint64
 	environment uint64
-	limit       uint64
 }
 
 type payloadBuilder struct {
@@ -310,34 +197,32 @@ func (builder *payloadBuilder) pointers(values ...uint64) uint64 {
 	return address
 }
 
-func buildPayload(base uint64, command, outputPath string, outputLimit int64) (payloadLayout, error) {
+func buildPayload(base uint64, terminalPath string) (payloadLayout, error) {
 	builder := payloadBuilder{base: base}
 	name := builder.string("peirates-host")
 	root := builder.string("/")
-	null := builder.string("/dev/null")
-	output := builder.string(outputPath)
+	terminal := builder.string(terminalPath)
 	shell := builder.string("/bin/sh")
 	argv0 := builder.string("sh")
-	argv1 := builder.string("-c")
-	commandAddress := builder.string(command)
+	argv1 := builder.string("-i")
 	environmentValues := []string{
 		"HOME=/root", "USER=root", "LOGNAME=root", "SHELL=/bin/sh",
+		"TERM=xterm-256color",
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
 	var environmentPointers []uint64
 	for _, value := range environmentValues {
 		environmentPointers = append(environmentPointers, builder.string(value))
 	}
-	argv := builder.pointers(argv0, argv1, commandAddress, 0)
+	argv := builder.pointers(argv0, argv1, 0)
 	environmentPointers = append(environmentPointers, 0)
 	environment := builder.pointers(environmentPointers...)
-	limit := builder.pointers(uint64(outputLimit), uint64(outputLimit))
 	if len(builder.data) > scratchSize {
-		return payloadLayout{}, errors.New("internal command payload exceeds scratch mapping")
+		return payloadLayout{}, errors.New("internal interactive-shell payload exceeds scratch mapping")
 	}
 	return payloadLayout{
-		data: builder.data, name: name, root: root, null: null, output: output,
-		shell: shell, argv: argv, environment: environment, limit: limit,
+		data: builder.data, name: name, root: root, terminal: terminal,
+		shell: shell, argv: argv, environment: environment,
 	}, nil
 }
 
@@ -346,7 +231,6 @@ type engine struct {
 	ctx      context.Context
 	target   Candidate
 	targetFD int
-	artifact *outputArtifact
 	stage    mutationStage
 
 	savedRegs      unix.PtraceRegs
@@ -363,10 +247,10 @@ type engine struct {
 	childReaped  bool
 }
 
-func runEngine(ctx context.Context, options RunOptions, target Candidate, targetFD int, artifact *outputArtifact) (Result, error) {
+func runEngine(ctx context.Context, options RunOptions, target Candidate, targetFD int) (Result, error) {
 	state := &engine{
 		api: unixTracePlatform{}, ctx: ctx, target: target, targetFD: targetFD,
-		artifact: artifact, stage: stageOutputCreated, childFD: -1,
+		stage: stageQualified, childFD: -1,
 	}
 	result, operationErr := state.execute(options)
 	cleanupErr := state.cleanup(&result)
@@ -446,7 +330,7 @@ func (state *engine) execute(options RunOptions) (Result, error) {
 		return Result{}, fmt.Errorf("allocate target scratch mapping: %w", err)
 	}
 	state.scratch = mapping
-	payload, err := buildPayload(mapping, options.Command, state.artifact.hostPath(), options.OutputLimit)
+	payload, err := buildPayload(mapping, fmt.Sprintf("/dev/pts/%d", options.Terminal.Number))
 	if err != nil {
 		return Result{}, err
 	}
@@ -488,16 +372,7 @@ func (state *engine) execute(options RunOptions) (Result, error) {
 		return Result{}, err
 	}
 	state.stage = stageChildExeced
-	result, err := state.waitChild(options.Timeout)
-	if err != nil {
-		return result, err
-	}
-	output, truncated, readErr := state.artifact.read(options.OutputLimit)
-	result.Output, result.OutputTruncated = output, truncated
-	if readErr != nil {
-		return result, fmt.Errorf("read command output: %w", readErr)
-	}
-	return result, nil
+	return state.waitChild()
 }
 
 func (state *engine) remoteSyscall(pid int, number uint64, args [6]uint64) (uint64, error) {
@@ -631,32 +506,28 @@ func (state *engine) configureChild(payload payloadLayout) error {
 	if _, err := state.childSyscall(unix.SYS_CHDIR, [6]uint64{payload.root}); err != nil {
 		return fmt.Errorf("change child directory: %w", err)
 	}
-	nullFD, err := state.childSyscall(unix.SYS_OPENAT, [6]uint64{uint64(currentDirectory), payload.null, unix.O_RDONLY})
-	if err != nil {
-		return fmt.Errorf("open child /dev/null: %w", err)
+	if _, err := state.childSyscall(unix.SYS_SETSID, [6]uint64{}); err != nil {
+		return fmt.Errorf("create child terminal session: %w", err)
 	}
-	outputFD, err := state.childSyscall(unix.SYS_OPENAT, [6]uint64{uint64(currentDirectory), payload.output, unix.O_WRONLY | unix.O_NOFOLLOW})
+	terminalFD, err := state.childSyscall(unix.SYS_OPENAT, [6]uint64{uint64(currentDirectory), payload.terminal, unix.O_RDWR | unix.O_NOCTTY})
 	if err != nil {
-		return fmt.Errorf("open child output: %w", err)
+		return fmt.Errorf("open child PTY slave: %w", err)
 	}
-	for _, redirect := range []struct{ source, target uint64 }{{nullFD, 0}, {outputFD, 1}, {outputFD, 2}} {
-		if redirect.source == redirect.target {
+	if _, err := state.childSyscall(unix.SYS_IOCTL, [6]uint64{terminalFD, unix.TIOCSCTTY, 0}); err != nil {
+		return fmt.Errorf("make PTY the child controlling terminal: %w", err)
+	}
+	for _, targetFD := range []uint64{0, 1, 2} {
+		if terminalFD == targetFD {
 			continue
 		}
-		if _, err := state.childSyscall(unix.SYS_DUP3, [6]uint64{redirect.source, redirect.target, 0}); err != nil {
-			return fmt.Errorf("redirect child descriptor %d: %w", redirect.target, err)
+		if _, err := state.childSyscall(unix.SYS_DUP3, [6]uint64{terminalFD, targetFD, 0}); err != nil {
+			return fmt.Errorf("redirect child descriptor %d: %w", targetFD, err)
 		}
 	}
-	for _, descriptor := range []uint64{nullFD, outputFD} {
-		if descriptor <= 2 {
-			continue
-		}
-		if _, err := state.childSyscall(unix.SYS_CLOSE, [6]uint64{descriptor}); err != nil {
+	if terminalFD > 2 {
+		if _, err := state.childSyscall(unix.SYS_CLOSE, [6]uint64{terminalFD}); err != nil {
 			return fmt.Errorf("close child descriptor: %w", err)
 		}
-	}
-	if _, err := state.childSyscall(unix.SYS_PRLIMIT64, [6]uint64{0, unix.RLIMIT_FSIZE, payload.limit, 0}); err != nil {
-		return fmt.Errorf("set child output size limit: %w", err)
 	}
 	return nil
 }
@@ -680,28 +551,26 @@ func (state *engine) execChild(payload payloadLayout) error {
 	return nil
 }
 
-func (state *engine) waitChild(timeout time.Duration) (Result, error) {
+func (state *engine) waitChild() (Result, error) {
 	if err := state.api.cont(state.childPID, 0); err != nil {
 		return Result{}, err
 	}
 	state.childStopped = false
-	ctx, cancel := context.WithTimeout(state.ctx, timeout)
-	defer cancel()
 	for {
-		event, err := state.api.wait(ctx, state.childPID, timeout)
+		event, err := state.api.wait(state.ctx, state.childPID, 0)
 		if err != nil {
-			return Result{}, fmt.Errorf("wait for injected child: %w", err)
+			return Result{}, fmt.Errorf("wait for interactive host shell: %w", err)
 		}
 		status := event.status
 		if status.Exited() {
 			state.childReaped = true
 			state.stage = stageChildReaped
-			return Result{CommandCompleted: true, ExitCode: status.ExitStatus(), TargetRestored: true, TargetDetached: true}, nil
+			return Result{ShellExited: true, ExitCode: status.ExitStatus(), TargetRestored: true, TargetDetached: true}, nil
 		}
 		if status.Signaled() {
 			state.childReaped = true
 			state.stage = stageChildReaped
-			return Result{CommandCompleted: true, ExitCode: -1, Signal: int(status.Signal()), TargetRestored: true, TargetDetached: true}, nil
+			return Result{ShellExited: true, ExitCode: -1, Signal: int(status.Signal()), TargetRestored: true, TargetDetached: true}, nil
 		}
 		if status.Stopped() && status.TrapCause() == unix.PTRACE_EVENT_EXIT {
 			state.childStopped = true
@@ -804,15 +673,6 @@ func (state *engine) cleanup(result *Result) error {
 		_ = state.api.close(state.childFD)
 		state.childFD = -1
 	}
-	if state.artifact != nil {
-		if err := state.artifact.remove(); err != nil {
-			failures = append(failures, err.Error())
-		} else {
-			state.stage = stageOutputRemoved
-			result.OutputRemoved = true
-		}
-		state.artifact.close()
-	}
 	if len(failures) != 0 {
 		return errors.New(strings.Join(failures, "; "))
 	}
@@ -875,8 +735,8 @@ func decodeSyscallReturn(value uint64) (uint64, error) {
 func allowedRemoteSyscall(number uint64) bool {
 	switch number {
 	case unix.SYS_MMAP, unix.SYS_MUNMAP, unix.SYS_CLONE, unix.SYS_PRCTL,
-		unix.SYS_CHDIR, unix.SYS_OPENAT, unix.SYS_DUP3, unix.SYS_CLOSE,
-		unix.SYS_PRLIMIT64, unix.SYS_EXECVE, unix.SYS_EXIT_GROUP:
+		unix.SYS_CHDIR, unix.SYS_SETSID, unix.SYS_OPENAT, unix.SYS_IOCTL,
+		unix.SYS_DUP3, unix.SYS_CLOSE, unix.SYS_EXECVE, unix.SYS_EXIT_GROUP:
 		return true
 	default:
 		return false
@@ -950,7 +810,7 @@ func verifyChildIdentity(pid int, target Candidate) error {
 	return nil
 }
 
-func launchWorker(ctx context.Context, options RunOptions) (Result, error) {
+func launchWorker(ctx context.Context, options RunOptions, input io.Reader, output io.Writer, terminalFD int, master *os.File) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -992,25 +852,41 @@ func launchWorker(ctx context.Context, options RunOptions) (Result, error) {
 	responseWrite.Close()
 	if err := writeFrame(requestWrite, requestFromOptions(options)); err != nil {
 		requestWrite.Close()
+		_ = command.Process.Signal(unix.SIGTERM)
 		_ = command.Wait()
 		close(workerDone)
 		return Result{}, err
 	}
 	requestWrite.Close()
-	var response workerResponse
-	readErr := readFrame(responseRead, &response)
+	outcomes := make(chan workerOutcome, 1)
+	go func() {
+		var response workerResponse
+		readErr := readFrame(responseRead, &response)
+		outcomes <- workerOutcome{response: response, err: readErr}
+	}()
+	outcome, relayErr := relayPTY(ctx, master, input, output, terminalFD, outcomes)
+	if relayErr != nil {
+		_ = command.Process.Signal(unix.SIGTERM)
+	}
 	waitErr := command.Wait()
 	close(workerDone)
-	if readErr != nil {
-		return Result{}, readErr
+	if relayErr != nil {
+		outcome = <-outcomes
+		if outcome.err != nil {
+			return Result{}, fmt.Errorf("interactive PTY relay failed: %v; worker response failed: %w", relayErr, outcome.err)
+		}
+		return outcome.response.Result, relayErr
+	}
+	if outcome.err != nil {
+		return Result{}, outcome.err
 	}
 	if waitErr != nil {
-		return response.Result, fmt.Errorf("private ptrace worker exited unsuccessfully: %w", waitErr)
+		return outcome.response.Result, fmt.Errorf("private ptrace worker exited unsuccessfully: %w", waitErr)
 	}
-	if response.Error != "" {
-		return response.Result, errors.New(response.Error)
+	if outcome.response.Error != "" {
+		return outcome.response.Result, errors.New(outcome.response.Error)
 	}
-	return response.Result, nil
+	return outcome.response.Result, nil
 }
 
 func runWorker(requestReader io.Reader, responseWriter io.Writer) error {
@@ -1024,9 +900,7 @@ func runWorker(requestReader io.Reader, responseWriter io.Writer) error {
 	}
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, unix.SIGTERM, unix.SIGHUP)
 	defer stopSignals()
-	ctx, cancel := context.WithTimeout(signalContext, options.Timeout+15*time.Second)
-	defer cancel()
-	if err := ctx.Err(); err != nil {
+	if err := signalContext.Err(); err != nil {
 		return err
 	}
 	runtime.LockOSThread()
@@ -1035,25 +909,22 @@ func runWorker(requestReader io.Reader, responseWriter io.Writer) error {
 	if err != nil {
 		return writeFrame(responseWriter, workerResponse{Error: err.Error()})
 	}
-	artifact, err := createOutputArtifact(target.PID, target.RootID)
-	if err != nil {
+	if err := validateTargetPTY(target, options.Terminal); err != nil {
 		unix.Close(targetFD)
 		return writeFrame(responseWriter, workerResponse{Error: err.Error()})
 	}
 	revalidated, revalidatedFD, err := revalidateCandidate(target)
 	if err != nil {
 		unix.Close(targetFD)
-		removeErr := artifact.remove()
-		artifact.close()
-		message := err.Error()
-		if removeErr != nil {
-			message += "; cleanup capture file: " + removeErr.Error()
-		}
-		return writeFrame(responseWriter, workerResponse{Error: message})
+		return writeFrame(responseWriter, workerResponse{Error: err.Error()})
 	}
 	unix.Close(targetFD)
 	target, targetFD = revalidated, revalidatedFD
-	result, runErr := runEngine(ctx, options, target, targetFD, artifact)
+	if err := validateTargetPTY(target, options.Terminal); err != nil {
+		unix.Close(targetFD)
+		return writeFrame(responseWriter, workerResponse{Error: err.Error()})
+	}
+	result, runErr := runEngine(signalContext, options, target, targetFD)
 	response := workerResponse{Result: result}
 	if runErr != nil {
 		response.Error = runErr.Error()

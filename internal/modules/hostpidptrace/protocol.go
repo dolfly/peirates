@@ -7,14 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 )
 
 type workerRequest struct {
-	Target      Candidate `json:"target"`
-	Command     string    `json:"command"`
-	TimeoutNS   int64     `json:"timeout_ns"`
-	OutputLimit int64     `json:"output_limit"`
+	Target   Candidate    `json:"target"`
+	Terminal terminalSpec `json:"terminal"`
 }
 
 type workerResponse struct {
@@ -23,17 +20,11 @@ type workerResponse struct {
 }
 
 func requestFromOptions(options RunOptions) workerRequest {
-	return workerRequest{
-		Target: options.Target, Command: options.Command,
-		TimeoutNS: int64(options.Timeout), OutputLimit: options.OutputLimit,
-	}
+	return workerRequest{Target: options.Target, Terminal: options.Terminal}
 }
 
 func (request workerRequest) options() (RunOptions, error) {
-	return normalizeRunOptions(RunOptions{
-		Target: request.Target, Command: request.Command,
-		Timeout: time.Duration(request.TimeoutNS), OutputLimit: request.OutputLimit,
-	})
+	return normalizeRunOptions(RunOptions{Target: request.Target, Terminal: request.Terminal})
 }
 
 func writeFrame(writer io.Writer, value any) error {

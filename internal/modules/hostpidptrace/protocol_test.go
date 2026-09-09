@@ -5,14 +5,12 @@ import (
 	"encoding/binary"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestWorkerProtocolRoundTripKeepsCommandInsideFrame(t *testing.T) {
-	secret := "printf secret-marker"
+func TestWorkerProtocolRoundTripKeepsTerminalIdentityInsideFrame(t *testing.T) {
 	request := workerRequest{
-		Target: Candidate{PID: 42, StartTime: 99}, Command: secret,
-		TimeoutNS: int64(time.Second), OutputLimit: 100,
+		Target:   Candidate{PID: 42, StartTime: 99},
+		Terminal: terminalSpec{Number: 7, Identity: Identity{Device: 8, Inode: 9}, DeviceID: 10},
 	}
 	var frame bytes.Buffer
 	if err := writeFrame(&frame, request); err != nil {
@@ -22,11 +20,8 @@ func TestWorkerProtocolRoundTripKeepsCommandInsideFrame(t *testing.T) {
 	if err := readFrame(&frame, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Command != secret || decoded.Target.PID != 42 {
+	if decoded.Terminal != request.Terminal || decoded.Target.PID != 42 {
 		t.Fatalf("decoded request = %#v", decoded)
-	}
-	if strings.Contains(WorkerArgument, secret) {
-		t.Fatal("worker selector disclosed command")
 	}
 }
 
@@ -40,7 +35,7 @@ func TestWorkerProtocolRejectsMalformedSizeAndTrailingData(t *testing.T) {
 	}
 
 	var framed bytes.Buffer
-	if err := writeFrame(&framed, workerRequest{Target: Candidate{PID: 2}, Command: "id", TimeoutNS: 1, OutputLimit: 1}); err != nil {
+	if err := writeFrame(&framed, workerRequest{Target: Candidate{PID: 2}, Terminal: terminalSpec{Number: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	framed.WriteByte('x')
@@ -51,8 +46,8 @@ func TestWorkerProtocolRejectsMalformedSizeAndTrailingData(t *testing.T) {
 
 func TestWorkerProtocolRejectsUnknownAndDuplicateFields(t *testing.T) {
 	for _, payload := range []string{
-		`{"target":{"pid":2},"command":"id","timeout_ns":1,"output_limit":1,"unexpected":true}`,
-		`{"target":{"pid":2},"command":"id","command":"whoami","timeout_ns":1,"output_limit":1}`,
+		`{"target":{"pid":2},"terminal":{"number":1},"unexpected":true}`,
+		`{"target":{"pid":2},"target":{"pid":3},"terminal":{"number":1}}`,
 	} {
 		var frame bytes.Buffer
 		var header [4]byte

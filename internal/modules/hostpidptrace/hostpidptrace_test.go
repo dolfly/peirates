@@ -1,9 +1,7 @@
 package hostpidptrace
 
 import (
-	"strings"
 	"testing"
-	"time"
 )
 
 func TestConfirmationPhraseIsPIDSpecific(t *testing.T) {
@@ -12,35 +10,29 @@ func TestConfirmationPhraseIsPIDSpecific(t *testing.T) {
 	}
 }
 
-func TestNormalizeRunOptionsRejectsUnsafeCommands(t *testing.T) {
-	tests := []struct {
-		name    string
-		command string
-	}{
-		{name: "empty"},
-		{name: "NUL", command: "id\x00uname"},
-		{name: "too long", command: strings.Repeat("x", MaxCommandBytes+1)},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := normalizeRunOptions(RunOptions{Target: Candidate{PID: 12}, Command: test.command}); err == nil {
-				t.Fatal("unsafe command was accepted")
-			}
-		})
+func validRunOptions() RunOptions {
+	return RunOptions{
+		Target: Candidate{PID: 12},
+		Terminal: terminalSpec{
+			Number: 3, Identity: Identity{Device: 4, Inode: 5}, DeviceID: 6,
+		},
 	}
 }
 
-func TestNormalizeRunOptionsAppliesBounds(t *testing.T) {
-	options, err := normalizeRunOptions(RunOptions{Target: Candidate{PID: 12}, Command: "id"})
-	if err != nil {
+func TestNormalizeRunOptionsRequiresTargetAndTerminalIdentity(t *testing.T) {
+	if _, err := normalizeRunOptions(validRunOptions()); err != nil {
 		t.Fatal(err)
 	}
-	if options.Timeout != DefaultTimeout || options.OutputLimit != DefaultOutputLimit {
-		t.Fatalf("defaults = %#v", options)
-	}
-	if _, err := normalizeRunOptions(RunOptions{
-		Target: Candidate{PID: 12}, Command: "id", Timeout: 6 * time.Minute,
-	}); err == nil {
-		t.Fatal("excessive timeout was accepted")
+	for _, mutate := range []func(*RunOptions){
+		func(options *RunOptions) { options.Target.PID = 1 },
+		func(options *RunOptions) { options.Terminal.Number = -1 },
+		func(options *RunOptions) { options.Terminal.Identity = Identity{} },
+		func(options *RunOptions) { options.Terminal.DeviceID = 0 },
+	} {
+		options := validRunOptions()
+		mutate(&options)
+		if _, err := normalizeRunOptions(options); err == nil {
+			t.Fatalf("invalid options were accepted: %#v", options)
+		}
 	}
 }

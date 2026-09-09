@@ -82,7 +82,7 @@ Compromise |
 [26] Enter the host controlled by an exposed Docker socket [docker-socket-breakout]
 [27] Chroot a shell into an already-mounted host root filesystem [hostroot-breakout]
 [29] Enter the host through a writable host core_pattern [hostproc-core-pattern-breakout]
-[32] Run one command through an explicitly selected disposable host process [hostpid-ptrace-breakout]
+[32] Open an interactive shell through an explicitly selected disposable host process [hostpid-ptrace-breakout]
 -------------+
 Node Attacks |
 -------------+
@@ -285,7 +285,7 @@ func setUpCompletionMainMenu() *readline.PrefixCompleter {
 		readline.PcItem("hostfs-breakout"),
 		// [29] Enter the host through a writable host core_pattern [hostproc-core-pattern-breakout]
 		readline.PcItem("hostproc-core-pattern-breakout"),
-		// [32] Run one command through an explicitly selected disposable host process [hostpid-ptrace-breakout]
+		// [32] Open an interactive shell through an explicitly selected disposable host process [hostpid-ptrace-breakout]
 		readline.PcItem("hostpid-ptrace-breakout"),
 		// [30] Steal secrets from the node filesystem [nodefs-steal-secrets]
 		readline.PcItem("nodefs-steal-secrets"),

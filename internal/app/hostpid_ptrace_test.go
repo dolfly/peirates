@@ -28,24 +28,29 @@ func TestLaunchHostPIDPtraceRequiresExactSelectionAndConfirmation(t *testing.T) 
 		return hostpidptrace.ProbeResult{Candidates: []hostpidptrace.Candidate{candidate}}, nil
 	}
 	runs := 0
-	runHostPIDPtrace = func(_ context.Context, options hostpidptrace.RunOptions) (hostpidptrace.Result, error) {
+	runHostPIDPtrace = func(_ context.Context, target hostpidptrace.Candidate, input io.Reader, output io.Writer, terminalFD int) (hostpidptrace.Result, error) {
 		runs++
-		if options.Target.PID != 123 || options.Command != "printf marker" {
-			t.Fatalf("run options = %#v", options)
+		remaining, err := io.ReadAll(input)
+		if err != nil {
+			t.Fatal(err)
 		}
-		return hostpidptrace.Result{Output: []byte("marker\n"), CommandCompleted: true, ExitCode: 0, TargetRestored: true, TargetDetached: true, OutputRemoved: true}, nil
+		if target.PID != 123 || string(remaining) != "printf marker\nexit\n" || terminalFD != -1 {
+			t.Fatalf("target=%#v remaining=%q terminalFD=%d", target, remaining, terminalFD)
+		}
+		_, _ = io.WriteString(output, "marker\n")
+		return hostpidptrace.Result{ShellExited: true, ExitCode: 0, TargetRestored: true, TargetDetached: true}, nil
 	}
-	input := "123\nprintf marker\n" + hostpidptrace.ConfirmationPhrase(123) + "\n"
+	input := "123\n" + hostpidptrace.ConfirmationPhrase(123) + "\nprintf marker\nexit\n"
 	var stdout, stderr bytes.Buffer
 	if err := launchHostPIDPtraceBreakoutWithStreams(strings.NewReader(input), &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if runs != 1 || !strings.Contains(stdout.String(), "marker\n\nHost command exit code: 0\n") || !strings.Contains(stdout.String(), "restored=true detached=true") || !strings.Contains(stderr.String(), "can damage") {
+	if runs != 1 || !strings.Contains(stdout.String(), "marker\n\nInteractive host shell exit code: 0\n") || !strings.Contains(stdout.String(), "restored=true detached=true") || !strings.Contains(stderr.String(), "can damage") {
 		t.Fatalf("runs=%d stdout=%q stderr=%q", runs, stdout.String(), stderr.String())
 	}
 
 	runs = 0
-	if err := launchHostPIDPtraceBreakoutWithStreams(strings.NewReader("123\nid\nwrong\n"), io.Discard, io.Discard); err == nil || runs != 0 {
+	if err := launchHostPIDPtraceBreakoutWithStreams(strings.NewReader("123\nwrong\n"), io.Discard, io.Discard); err == nil || runs != 0 {
 		t.Fatalf("wrong confirmation err=%v runs=%d", err, runs)
 	}
 }
@@ -61,7 +66,7 @@ func TestLaunchHostPIDPtraceFailsClosedWhenTargetChanges(t *testing.T) {
 		}
 		return hostpidptrace.ProbeResult{}, nil
 	}
-	runHostPIDPtrace = func(context.Context, hostpidptrace.RunOptions) (hostpidptrace.Result, error) {
+	runHostPIDPtrace = func(context.Context, hostpidptrace.Candidate, io.Reader, io.Writer, int) (hostpidptrace.Result, error) {
 		t.Fatal("worker ran after target changed")
 		return hostpidptrace.Result{}, nil
 	}

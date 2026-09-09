@@ -4,10 +4,10 @@
 #
 # Tested behavior:
 # - Linux AMD64 static build and numeric/canonical command routing
-# - one bounded command at visible PID 1's Kind-node boundary
+# - one interactive PTY shell at visible PID 1's Kind-node boundary
 # - byte-for-byte target identity survival and pidfd child cleanup
 # - missing capabilities, private PID, non-boundary, multithreaded, PID 1,
-#   wrong-confirmation, target-exit, and command-timeout controls
+#   wrong-confirmation, target-exit, and clean-shell-exit controls
 #
 # Kind cannot establish an outside-all-containers physical-host claim. This
 # script never traces an existing service or changes Yama, seccomp, or LSM
@@ -128,6 +128,21 @@ printf '%s\n' \
     >"${thread_source}"
 GOCACHE="${GOCACHE:-/tmp/peirates-go-build}" GOFLAGS=-p=1 \
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "${thread_binary}" "${thread_source}"
+
+# A memory-intensive static link can briefly delay the disposable API server
+# on small test hosts. Re-establish readiness before creating test workloads.
+api_ready=false
+for _ in {1..120}; do
+    if kubectl --context "${context}" get --raw=/readyz >/dev/null 2>&1; then
+        api_ready=true
+        break
+    fi
+    sleep 1
+done
+[[ "${api_ready}" == true ]] || {
+    echo "disposable Kind API server did not recover after the AMD64 build" >&2
+    exit 1
+}
 
 docker exec -i "${node_name}" /bin/bash -c \
     'umask 022; cat > "$1"; chmod 0755 "$1"' _ "${thread_node_binary}" \
@@ -252,8 +267,8 @@ run_positive() {
     local module="$1" command output
     command="printf 'PTRACE_MARKER=%s\\n' '${marker}'; printf 'PTRACE_UID=%s\\n' \"\$(id -u)\"; printf 'PTRACE_HOST=%s\\n' \"\$(hostname)\"; printf 'PTRACE_PWD=%s\\n' \"\$(pwd)\"; printf 'PTRACE_PIDNS=%s\\n' \"\$(readlink /proc/self/ns/pid)\"; printf 'PTRACE_MNTNS=%s\\n' \"\$(readlink /proc/self/ns/mnt)\"; printf 'PTRACE_UTSNS=%s\\n' \"\$(readlink /proc/self/ns/uts)\""
     output="$({
-        printf '%s\n' "${target_pid}" "${command}" \
-            "TRACE-DISPOSABLE-HOST-PROCESS-${target_pid}"
+        printf '%s\n' "${target_pid}" \
+            "TRACE-DISPOSABLE-HOST-PROCESS-${target_pid}" "${command}" exit
     } | timeout 90s kubectl --context "${context}" -n "${namespace}" exec -i "${runner}" -- \
         /tmp/peirates -c -m "${module}" 2>&1)"
     assert_contains "${output}" "PTRACE_MARKER=${marker}" "${module} marker"
@@ -264,7 +279,7 @@ run_positive() {
     assert_contains "${output}" "PTRACE_MNTNS=${node_mount_ns}" "${module} mount namespace"
     assert_contains "${output}" "PTRACE_UTSNS=${node_uts_ns}" "${module} UTS namespace"
     assert_contains "${output}" "restored=true detached=true" "${module} restoration"
-    assert_contains "${output}" "output artifact removed=true" "${module} output cleanup"
+    assert_contains "${output}" "Interactive host shell exit code: 0" "${module} shell exit"
 }
 
 # Exercise both supported dispatch forms; the first release intentionally has
@@ -319,14 +334,14 @@ output="$({ printf '%s\n' "${multithread_pid}"; } | timeout 60s kubectl --contex
 assert_contains "${output}" "not in the eligible target list" "multithreaded target"
 
 # Wrong confirmation never attaches and leaves the target identity unchanged.
-output="$({ printf '%s\n' "${target_pid}" id WRONG; } | timeout 60s kubectl --context "${context}" -n "${namespace}" exec -i "${runner}" -- \
+output="$({ printf '%s\n' "${target_pid}" WRONG; } | timeout 60s kubectl --context "${context}" -n "${namespace}" exec -i "${runner}" -- \
     /tmp/peirates -c -m hostpid-ptrace-breakout 2>&1 || true)"
 assert_contains "${output}" "breakout cancelled; no process was traced" "wrong confirmation"
 [[ "$(docker exec "${node_name}" awk '{print $22}' "/proc/${target_pid}/stat")" == "${target_start}" ]]
 
 # Race control: wait for the first listing, select a live short-lived target,
-# wait for command input (which proves the second app-level probe passed), then
-# let the target exit before confirmation. The private worker must reject it.
+# wait for the confirmation prompt (which proves the second app-level probe
+# passed), then let the target exit. The private worker must reject it.
 short_marker="peirates-short-${RANDOM}"
 short_pid="$(docker exec "${node_name}" /bin/bash -c \
     'nohup /bin/bash -c '\''exec -a "$1" /bin/sleep 30'\'' _ "$1" >/dev/null 2>&1 & echo $!' _ "${short_marker}")"
@@ -346,43 +361,34 @@ done
 grep -Fq 'Disposable host PID to trace:' "${race_output}"
 printf '%s\n' "${short_pid}" >&9
 for _ in {1..200}; do
-    grep -Fq 'Single host command:' "${race_output}" && break
+    grep -Fq "Type TRACE-DISPOSABLE-HOST-PROCESS-${short_pid} to continue:" "${race_output}" && break
     sleep 0.05
 done
-grep -Fq 'Single host command:' "${race_output}"
+grep -Fq "Type TRACE-DISPOSABLE-HOST-PROCESS-${short_pid} to continue:" "${race_output}"
 kill_owned_node_process "${short_pid}" "${short_start}" "${short_marker}"
 for _ in {1..100}; do
     docker exec "${node_name}" test ! -e "/proc/${short_pid}" && break
     sleep 0.05
 done
-printf '%s\n' id "TRACE-DISPOSABLE-HOST-PROCESS-${short_pid}" >&9
+printf '%s\n' "TRACE-DISPOSABLE-HOST-PROCESS-${short_pid}" exit >&9
 exec 9>&-
 wait "${race_process}" || true
 output="$(<"${race_output}")"
 if [[ "${output}" != *"target is no longer eligible"* && \
-      "${output}" != *"open target pidfd: no such process"* ]]; then
+      "${output}" != *"open target pidfd: no such process"* && \
+      "${output}" != *"open target root for PTY: no such file or directory"* ]]; then
     echo "hostPID ptrace target-exit race did not fail closed during app or worker revalidation" >&2
     printf '%s\n' "${output}" >&2
     exit 1
 fi
 
-# The timeout command is intentionally harmless. It must terminate only the
-# injected child while preserving the test-owned sleep target.
-output="$({
-    printf '%s\n' "${target_pid}" "sleep 40" \
-        "TRACE-DISPOSABLE-HOST-PROCESS-${target_pid}"
-} | timeout 60s kubectl --context "${context}" -n "${namespace}" exec -i "${runner}" -- \
-    /tmp/peirates -c -m hostpid-ptrace-breakout 2>&1 || true)"
-assert_contains "${output}" "wait for injected child" "command timeout"
+# The scripted interactive shells exited cleanly and must preserve the target.
 [[ "$(docker exec "${node_name}" awk '{print $22}' "/proc/${target_pid}/stat")" == "${target_start}" ]]
 
-# No capture artifact or injected command child may remain in the node.
-if docker exec "${node_name}" sh -c 'find /tmp -maxdepth 1 -name ".peirates-ptrace-*" -print -quit | grep -q .' ; then
-    echo "hostPID ptrace capture artifact remained in the Kind node" >&2
-    exit 1
-fi
-if docker exec "${node_name}" pgrep -f '^peirates-host$' >/dev/null 2>&1; then
-    echo "hostPID ptrace injected child remained in the Kind node" >&2
+# No injected interactive shell may remain in the node.
+if docker exec "${node_name}" sh -c \
+    'for path in /proc/[0-9]*/cmdline; do command=$(tr "\000" " " < "$path" 2>/dev/null || true); test "$command" = "sh -i " && exit 0; done; exit 1'; then
+    echo "hostPID ptrace interactive shell remained in the Kind node" >&2
     exit 1
 fi
 

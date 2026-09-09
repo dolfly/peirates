@@ -9,9 +9,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/inguardians/peirates/internal/modules/hostpidptrace"
+	"golang.org/x/term"
 )
 
 var probeHostPIDPtrace = hostpidptrace.Probe
@@ -22,7 +22,7 @@ var launchHostPIDPtraceBreakout = func() error {
 }
 
 func launchHostPIDPtraceBreakoutWithStreams(stdin io.Reader, stdout, stderr io.Writer) error {
-	fmt.Fprintln(stdout, "This experimental command runs one bounded command through a disposable child of an explicitly selected process.")
+	fmt.Fprintln(stdout, "This experimental command opens an interactive shell through a disposable child of an explicitly selected process.")
 	fmt.Fprintln(stdout, "Eligible means the process matches visible PID 1's observable namespaces and root; it does not prove a physical-host boundary on nested platforms such as Kind.")
 	fmt.Fprintln(stderr, "WARNING: ptrace temporarily modifies a live process. A tracer crash, SIGKILL, kernel failure, or node loss can damage, stop, or kill the selected target. Select only a deliberately disposable process.")
 
@@ -90,19 +90,6 @@ func launchHostPIDPtraceBreakoutWithStreams(stdin io.Reader, stdout, stderr io.W
 	}
 	fmt.Fprintln(stdout, "All required namespace and filesystem-root identities match visible PID 1.")
 
-	command, err := readEscapePromptLine(reader, stdout, "Single host command: ")
-	if errors.Is(err, io.EOF) {
-		return errors.New("breakout cancelled; no process was traced")
-	}
-	if err != nil {
-		return fmt.Errorf("read host command: %w", err)
-	}
-	if command == "" {
-		return errors.New("a non-empty host command is required")
-	}
-	if len(command) > hostpidptrace.MaxCommandBytes || strings.IndexByte(command, 0) >= 0 {
-		return fmt.Errorf("host command must contain no NUL bytes and be at most %d bytes", hostpidptrace.MaxCommandBytes)
-	}
 	phrase := hostpidptrace.ConfirmationPhrase(pid)
 	confirmation, err := readEscapePromptLine(reader, stdout, "Type "+phrase+" to continue: ")
 	if errors.Is(err, io.EOF) || confirmation != phrase {
@@ -111,31 +98,32 @@ func launchHostPIDPtraceBreakoutWithStreams(stdin io.Reader, stdout, stderr io.W
 	if err != nil {
 		return fmt.Errorf("read ptrace confirmation: %w", err)
 	}
-	fmt.Fprintf(stdout, "[hostpid-ptrace-breakout] tracing disposable host PID %d to run one command in visible PID 1's namespaces\n", pid)
-	result, err := runHostPIDPtrace(context.Background(), hostpidptrace.RunOptions{
-		Target: target, Command: command,
-	})
-	if len(result.Output) != 0 {
-		if _, writeErr := stdout.Write(result.Output); writeErr != nil && err == nil {
-			err = writeErr
-		}
-		if result.Output[len(result.Output)-1] != '\n' {
-			fmt.Fprintln(stdout)
+	fmt.Fprintf(stdout, "[hostpid-ptrace-breakout] tracing disposable host PID %d to open an interactive shell in visible PID 1's namespaces\n", pid)
+	terminalFD := -1
+	var terminalState *term.State
+	if inputFile, ok := stdin.(*os.File); ok && term.IsTerminal(int(inputFile.Fd())) {
+		terminalFD = int(inputFile.Fd())
+		terminalState, err = term.MakeRaw(terminalFD)
+		if err != nil {
+			return fmt.Errorf("put local terminal in raw mode: %w", err)
 		}
 	}
-	if result.OutputTruncated {
-		fmt.Fprintln(stderr, "WARNING: command output was truncated at the configured limit")
+	result, err := runHostPIDPtrace(context.Background(), target, reader, stdout, terminalFD)
+	if terminalState != nil {
+		if restoreErr := term.Restore(terminalFD, terminalState); restoreErr != nil && err == nil {
+			err = fmt.Errorf("restore local terminal: %w", restoreErr)
+		}
 	}
-	if result.CommandCompleted {
+	if result.ShellExited {
 		fmt.Fprintln(stdout)
 		if result.Signal != 0 {
-			fmt.Fprintf(stdout, "Host command terminated by signal %d.\n", result.Signal)
+			fmt.Fprintf(stdout, "Interactive host shell terminated by signal %d.\n", result.Signal)
 		} else {
-			fmt.Fprintf(stdout, "Host command exit code: %d\n", result.ExitCode)
+			fmt.Fprintf(stdout, "Interactive host shell exit code: %d\n", result.ExitCode)
 		}
 	}
-	fmt.Fprintf(stdout, "Target restoration: restored=%t detached=%t; output artifact removed=%t\n",
-		result.TargetRestored, result.TargetDetached, result.OutputRemoved)
+	fmt.Fprintf(stdout, "Target restoration: restored=%t detached=%t\n",
+		result.TargetRestored, result.TargetDetached)
 	return err
 }
 

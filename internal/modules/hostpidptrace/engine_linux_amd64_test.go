@@ -129,18 +129,37 @@ func TestRunEngineAgainstOwnedDisposableProcess(t *testing.T) {
 	if err != nil {
 		t.Skipf("pidfd_open is unavailable for the disposable target: %v", err)
 	}
-	artifact, err := createOutputArtifact(targetPID, target.RootID)
+	master, terminal, err := openTargetPTY(target)
 	if err != nil {
 		_ = unix.Close(targetFD)
 		t.Fatal(err)
 	}
+	defer master.Close()
+	outputDone := make(chan []byte, 1)
+	stopOutput := make(chan struct{})
+	go func() {
+		pending := []byte("printf peirates-owned-ptrace-ok; exit\n")
+		var output bytes.Buffer
+		for {
+			pending, _ = writeAvailablePTY(int(master.Fd()), pending)
+			_ = readAvailablePTY(int(master.Fd()), &output)
+			select {
+			case <-stopOutput:
+				_ = drainPTY(int(master.Fd()), &output)
+				outputDone <- output.Bytes()
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+	}()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	runtime.LockOSThread()
-	result, err := runEngine(context.Background(), RunOptions{
-		Target: target, Command: "printf peirates-owned-ptrace-ok",
-		Timeout: 5 * time.Second, OutputLimit: 4096,
-	}, target, targetFD, artifact)
+	result, err := runEngine(ctx, RunOptions{Target: target, Terminal: terminal}, target, targetFD)
 	runtime.UnlockOSThread()
+	close(stopOutput)
+	shellOutput := <-outputDone
 	if err != nil {
 		if strings.Contains(err.Error(), "PTRACE_SEIZE target") &&
 			(errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES)) {
@@ -148,13 +167,13 @@ func TestRunEngineAgainstOwnedDisposableProcess(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
-	if !result.CommandCompleted || result.ExitCode != 0 || result.Signal != 0 {
-		t.Fatalf("command result = %#v", result)
+	if !result.ShellExited || result.ExitCode != 0 || result.Signal != 0 {
+		t.Fatalf("shell result = %#v", result)
 	}
-	if string(result.Output) != "peirates-owned-ptrace-ok" || result.OutputTruncated {
-		t.Fatalf("command output = %q, truncated=%t", result.Output, result.OutputTruncated)
+	if !bytes.Contains(shellOutput, []byte("peirates-owned-ptrace-ok")) {
+		t.Fatalf("interactive shell output = %q", shellOutput)
 	}
-	if !result.TargetRestored || !result.TargetDetached || !result.OutputRemoved {
+	if !result.TargetRestored || !result.TargetDetached {
 		t.Fatalf("cleanup result = %#v", result)
 	}
 
@@ -262,11 +281,11 @@ func TestWaitChildContinuesExecEventsAndReinjectsSignals(t *testing.T) {
 		api: api, ctx: context.Background(), childPID: 55, childFD: 88,
 		stage: stageChildExeced,
 	}
-	result, err := state.waitChild(time.Second)
+	result, err := state.waitChild()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.CommandCompleted || result.ExitCode != 0 || state.stage != stageChildReaped {
+	if !result.ShellExited || result.ExitCode != 0 || state.stage != stageChildReaped {
 		t.Fatalf("result=%#v stage=%s", result, state.stage)
 	}
 	wantSignals := []int{0, int(unix.SIGCHLD), 0, 0}
@@ -289,7 +308,7 @@ func TestCleanupNeverFallsBackToRawPIDSignal(t *testing.T) {
 func TestCleanupHandlesEveryMutationStage(t *testing.T) {
 	ptraceStop := unix.WaitStatus((unix.PTRACE_EVENT_STOP << 16) | (int(unix.SIGTRAP) << 8) | 0x7f)
 	for _, stage := range []mutationStage{
-		stageOutputCreated, stageTargetSeized, stageTargetStopped, stageTargetPatched,
+		stageQualified, stageTargetSeized, stageTargetStopped, stageTargetPatched,
 		stageChildCreated, stageChildContained, stageTargetRestored,
 		stageTargetDetached, stageChildExeced, stageChildReaped,
 	} {
@@ -319,55 +338,6 @@ func TestCleanupHandlesEveryMutationStage(t *testing.T) {
 				t.Fatalf("stage %s result = %#v", stage, result)
 			}
 		})
-	}
-}
-
-func TestOutputArtifactReadEnforcesLimit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "capture")
-	if err := os.WriteFile(path, []byte("0123456789"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	fd, err := unix.Open(path, unix.O_RDWR|unix.O_CLOEXEC, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unix.Close(fd)
-	artifact := &outputArtifact{fileFD: fd}
-	output, truncated, err := artifact.read(4)
-	if err != nil || string(output) != "0123" || !truncated {
-		t.Fatalf("read = %q, %t, %v", output, truncated, err)
-	}
-}
-
-func TestOutputArtifactRemovalRefusesIdentityChange(t *testing.T) {
-	directory := t.TempDir()
-	dirFD, err := unix.Open(directory, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unix.Close(dirFD)
-	name := "capture"
-	fd, err := unix.Openat(dirFD, name, unix.O_CREAT|unix.O_EXCL|unix.O_RDWR|unix.O_NOFOLLOW, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unix.Close(fd)
-	var stat unix.Stat_t
-	if err := unix.Fstat(fd, &stat); err != nil {
-		t.Fatal(err)
-	}
-	artifact := &outputArtifact{tmpFD: dirFD, fileFD: fd, name: name, id: Identity{Device: uint64(stat.Dev), Inode: stat.Ino}}
-	if err := unix.Unlinkat(dirFD, name, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(directory, name), []byte("replacement"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := artifact.remove(); err == nil || !strings.Contains(err.Error(), "identity changed") {
-		t.Fatalf("identity-safe removal error = %v", err)
-	}
-	if data, err := os.ReadFile(filepath.Join(directory, name)); err != nil || string(data) != "replacement" {
-		t.Fatalf("replacement file changed: %q, %v", data, err)
 	}
 }
 
