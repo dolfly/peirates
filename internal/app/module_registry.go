@@ -139,6 +139,12 @@ func newModuleRegistry(session *Session) *modules.Registry {
 		return modules.Continue
 	}, "hostproc-core-pattern-breakout")
 	registry.Register(func() modules.Result {
+		if err := launchHostPIDPtraceBreakout(); err != nil {
+			fmt.Fprintf(os.Stderr, "[hostpid-ptrace-breakout] %v\n", err)
+		}
+		return modules.Continue
+	}, "hostpid-ptrace-breakout")
+	registry.Register(func() modules.Result {
 		println("\nAttempting to steal secrets from the node filesystem - this will return no output if run in a container or if /var/lib/kubelet is inaccessible.\n")
 		gatherPodCredentials(&session.ServiceAccounts, true, true)
 		return modules.Continue

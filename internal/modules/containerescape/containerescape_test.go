@@ -23,7 +23,7 @@ func TestNormalizeOptions(t *testing.T) {
 
 func TestUnsupportedFindingsAreComplete(t *testing.T) {
 	findings := unsupportedFindings()
-	if len(findings) != 5 {
+	if len(findings) != 6 {
 		t.Fatalf("finding count = %d", len(findings))
 	}
 	for _, finding := range findings {

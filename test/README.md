@@ -304,6 +304,35 @@ cluster named `peirates-hostpid-breakout-integration`, uses the shared private
 kubeconfig and ownership protections, and deletes only its proven-owned
 cluster. Override the name with `PEIRATES_HOSTPID_BREAKOUT_KIND_CLUSTER`.
 
+## HostPID ptrace breakout integration test
+
+Run `make hostpid-ptrace-breakout-kind-test` to create a disposable Linux AMD64
+Kind cluster and exercise menu item 32 against only a uniquely marked root
+`sleep` process created by the test inside the Kind node. The runner pod uses
+`hostPID: true`, adds `SYS_PTRACE` and `SYS_ADMIN`, remains non-privileged, and
+uses the runtime-default seccomp profile. The test runs one harmless command at
+the Kind-node boundary and independently compares UID, hostname, working
+directory, and PID, mount, and UTS namespace identities with Docker-side
+observations.
+
+The harness verifies that the original target retains the same PID, start
+time, executable, and command line after detach; that capture files and
+injected children are removed; and that an injected-child timeout does not
+terminate the target. Negative controls cover each missing capability, a
+private PID namespace, PID 1, a target in another pod's namespace, a
+test-owned multithreaded process, wrong confirmation, and target exit. Nested
+user-namespace coverage runs only where the node permits creating one; the
+harness never changes Yama, seccomp, AppArmor, SELinux, or user-namespace
+policy.
+
+Kind proves mechanics relative to its node container only. A disposable VM
+whose Kubernetes node is installed directly on an independent kernel remains
+the release gate for an outside-all-containers claim. The test refuses a
+pre-existing cluster named `peirates-hostpid-ptrace-integration`, uses the
+shared fail-closed ownership and private-kubeconfig helpers, and deletes only
+its proven-owned cluster. Override the name with
+`PEIRATES_HOSTPID_PTRACE_KIND_CLUSTER`.
+
 ## Container escape scan integration test
 
 Run `make container-escape-scan-kind-test` to verify that main-menu item 25

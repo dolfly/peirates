@@ -46,6 +46,7 @@ Commands can normally be selected interactively by number, canonical name, or al
 | 27 | `hostroot-breakout` | [Chroot a shell into an already-mounted host root filesystem](hostroot-breakout.md) |
 | 29 | `hostproc-core-pattern-breakout` | [Enter a host through a writable host core pattern](hostproc-core-pattern-breakout.md) |
 | 30 | `nodefs-steal-secrets` | [Collect credentials from the node filesystem](nodefs-steal-secrets.md) |
+| 32 | `hostpid-ptrace-breakout` | [Run one command through a disposable host process](hostpid-ptrace-breakout.md) |
 
 ## General utilities
 

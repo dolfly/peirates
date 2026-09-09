@@ -102,6 +102,7 @@ func scanWithSystem(ctx context.Context, options Options, system scannerSystem) 
 	facts := collectFacts(system)
 	findings := []escapeutil.Finding{
 		probeHostPID(system, facts),
+		probeHostPIDPtrace(facts),
 		probeHostRoot(system, facts),
 		probeDocker(ctx, system, options),
 		probeCgroupRelease(system, facts),
@@ -111,6 +112,44 @@ func scanWithSystem(ctx context.Context, options Options, system scannerSystem) 
 		return nil, err
 	}
 	return findings, nil
+}
+
+func probeHostPIDPtrace(facts scanFacts) escapeutil.Finding {
+	finding := escapeutil.Finding{Technique: TechniqueHostPIDPtrace}
+	var blockers []string
+	if facts.effectiveUID != 0 {
+		blockers = append(blockers, "effective UID 0 is absent")
+	}
+	if facts.statusErr != nil {
+		blockers = append(blockers, "effective capabilities could not be read")
+	} else {
+		for _, capability := range []struct {
+			name string
+			bit  int
+		}{{"CAP_SYS_PTRACE", unix.CAP_SYS_PTRACE}, {"CAP_SYS_ADMIN", unix.CAP_SYS_ADMIN}} {
+			if !escapeutil.HasCapability(facts.capabilities, capability.bit) {
+				blockers = append(blockers, capability.name+" is not effective")
+			} else {
+				finding.Evidence = append(finding.Evidence, capability.name+" is effective")
+			}
+		}
+	}
+	for _, namespace := range []string{"pid", "user"} {
+		pair := facts.namespaces[namespace]
+		if pair.current.err != nil || pair.pidOne.err != nil {
+			blockers = append(blockers, namespace+" namespace identity could not be inspected")
+		} else if !pair.current.identity.Equal(pair.pidOne.identity) {
+			blockers = append(blockers, namespace+" namespace differs from visible PID 1")
+		} else {
+			finding.Evidence = append(finding.Evidence, namespace+" namespace matches visible PID 1")
+		}
+	}
+	finding = finishFinding(finding, blockers,
+		"hostPID, compatible user namespace, and ptrace capability prerequisites are present; explicit disposable target selection is still required")
+	if len(blockers) == 0 {
+		finding.Status = escapeutil.StatusCandidate
+	}
+	return finding
 }
 
 func collectFacts(system scannerSystem) scanFacts {

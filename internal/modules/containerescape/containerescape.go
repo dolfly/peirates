@@ -17,6 +17,7 @@ const (
 	TechniqueDockerSocket  = "docker-socket-breakout"
 	TechniqueCgroupRelease = "cgroup-release-agent-breakout"
 	TechniqueCorePattern   = "hostproc-core-pattern-breakout"
+	TechniqueHostPIDPtrace = "hostpid-ptrace-breakout"
 )
 
 const (
@@ -81,13 +82,14 @@ func Run(ctx context.Context, output io.Writer) error {
 }
 
 func unsupportedFindings() []escapeutil.Finding {
-	result := make([]escapeutil.Finding, 0, 5)
+	result := make([]escapeutil.Finding, 0, 6)
 	for _, technique := range []string{
 		TechniqueHostPID,
 		TechniqueHostRoot,
 		TechniqueDockerSocket,
 		TechniqueCgroupRelease,
 		TechniqueCorePattern,
+		TechniqueHostPIDPtrace,
 	} {
 		result = append(result, escapeutil.Finding{
 			Technique: technique,

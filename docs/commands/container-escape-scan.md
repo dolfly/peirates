@@ -86,7 +86,10 @@ The scan emits one result for each reviewed technique:
   and
 - `hostproc-core-pattern-breakout`: writable `core_pattern` exposed by a procfs
   mount. This remains a kernel-global candidate rather than proof that the
-  action will succeed or reach the intended host.
+  action will succeed or reach the intended host; and
+- `hostpid-ptrace-breakout`: effective UID 0, matching visible-PID-1 PID and
+  user namespaces, and effective `CAP_SYS_PTRACE` and `CAP_SYS_ADMIN`. An
+  explicit eligible disposable process must still be selected by the action.
 
 The cgroup technique remains assessment-only. The core-pattern action is a
 separate, explicitly confirmed command; the scanner itself remains read-only
@@ -122,6 +125,7 @@ Container escape assessment (read-only; findings are not proof of escape):
 [candidate] docker-socket-breakout: ...
 [unsupported] cgroup-release-agent-breakout: ...
 [blocked] hostproc-core-pattern-breakout: ...
+[blocked] hostpid-ptrace-breakout: ...
 ```
 
 Indented evidence lines explain successful checks. Exact results depend on the

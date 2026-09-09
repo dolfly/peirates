@@ -1,6 +1,6 @@
 # Container escape expansion plan
 
-Status: **APPROVED** on 2026-09-04 for commands 25–27. On 2026-09-08, command 29 was separately authorized for implementation with the safety contract below; its dedicated positive test remains deferred until an independent-kernel VM harness is available. Command 28 remains detection-only.
+Status: **IMPLEMENTED** for commands 25–27 and 29. Commands 25–27 were approved on 2026-09-04, and command 29 was separately authorized and completed on 2026-09-08 under the safety contract below. Command 29's dedicated automated positive test remains deferred until an independent-kernel VM harness is available. Command 28 remains detection-only.
 
 The planning agent reviewed all 114 slides in the [Black Hat USA 2019 Compendium of Container Escapes](https://i.blackhat.com/USA-19/Thursday/us-19-Edwards-Compendium-Of-Container-Escapes-up.pdf) and inspected the existing `hostpid-breakout` implementation before producing this plan.
 
@@ -15,12 +15,13 @@ Add three commands:
 | 27 | `hostroot-breakout` | Chroot into an already-mounted host filesystem |
 
 The initial scope reserved two experimental commands as scan findings. Command
-29 was subsequently authorized as described in the status amendment above:
+29 was subsequently authorized and implemented as described in the status
+amendment above:
 
-| Reserved | Command | Reason |
+| Menu | Command | Status |
 |---:|---|---|
-| 28 | `cgroup-release-agent-breakout` | Requires cgroup v1 and changes kernel-global configuration |
-| 29 | `hostproc-core-pattern-breakout` | Temporarily overwrites the host-wide crash-handler setting |
+| 28 | `cgroup-release-agent-breakout` | Detection-only; requires cgroup v1 and changes kernel-global configuration |
+| 29 | `hostproc-core-pattern-breakout` | Implemented; temporarily overwrites and safely restores the host-wide crash-handler setting |
 
 This prioritization follows the source slides:
 
@@ -143,8 +144,8 @@ A successful positive test must run in a disposable VM with an independent kerne
 
 ### Host-proc `core_pattern`
 
-Initially detection-only, this action was separately authorized on 2026-09-08
-with these mandatory constraints:
+Initially detection-only, this action was separately authorized and completed
+on 2026-09-08 with these mandatory constraints:
 
 - Positively identified host procfs.
 - A host-visible payload.
@@ -154,9 +155,13 @@ with these mandatory constraints:
 - A disposable child as the only crashed process.
 - An independent-kernel VM test harness.
 
-The implementation must not add a reverse shell or persistence. Its dedicated
-positive test is intentionally deferred, and the action must not be exercised
-in Kind because `core_pattern` is kernel-global.
+The implementation does not add a reverse shell or persistence. A bounded,
+explicitly authorized manual run from the existing Kind test pod succeeded on
+2026-09-08: it reached a root shell in the kernel's initial namespaces and
+independently verified restoration of the exact original `core_pattern` value.
+No routine Kind integration target was added because `core_pattern` is
+kernel-global. The dedicated automated positive test remains deferred to an
+independent-kernel VM harness.
 
 The implemented payload path uses the kernel's initial-namespace PID expansion:
 `/bin/sh` reads the temporary handler through `/proc/%P/root`. This avoids an
@@ -336,8 +341,9 @@ For `ldd`, the expected result is “not a dynamic executable” or equivalent. 
 ## Approved decisions
 
 1. Implement only commands 25–27 initially.
-2. Keep item 28 detection-only. Item 29 was separately approved on 2026-09-08;
-   defer its dedicated positive test until an independent-kernel VM harness exists.
+2. Keep item 28 detection-only. Item 29 was separately approved and implemented
+   on 2026-09-08; defer its dedicated automated positive test until an
+   independent-kernel VM harness exists.
 3. Keep `hostroot-breakout` filesystem-only.
 4. Require a pre-existing Docker image and prohibit automatic pulls.
 5. Use existing stdin prompting conventions in direct `-m` mode rather than adding global flags.

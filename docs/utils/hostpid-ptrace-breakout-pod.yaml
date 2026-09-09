@@ -1,0 +1,38 @@
+# Deliberately vulnerable lab fixture for hostpid-ptrace-breakout.
+# Do not deploy this pod to a production or shared cluster.
+#
+# The manifest does not create a trace target. From the test node's console,
+# start a bounded, single-threaded root process specifically for the test and
+# select only that disposable PID in Peirates.
+#
+# Example access after the pod is ready:
+#   kubectl exec -it peirates-hostpid-ptrace-test -- /peirates
+apiVersion: v1
+kind: Pod
+metadata:
+  name: peirates-hostpid-ptrace-test
+  labels:
+    app.kubernetes.io/name: peirates
+    app.kubernetes.io/component: hostpid-ptrace-test
+  annotations:
+    security.peirates.io/purpose: deliberately-vulnerable-lab-fixture
+spec:
+  hostPID: true
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  activeDeadlineSeconds: 3600
+  terminationGracePeriodSeconds: 1
+  containers:
+  - name: peirates
+    image: nginx
+    command: ["/bin/sh", "-c", "sleep 3600"]
+    securityContext:
+      privileged: false
+      runAsUser: 0
+      runAsGroup: 0
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+        add: ["SYS_PTRACE", "SYS_ADMIN"]
+      seccompProfile:
+        type: RuntimeDefault

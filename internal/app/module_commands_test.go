@@ -26,6 +26,9 @@ func TestMainSafeModuleHelper(t *testing.T) {
 	launchHostPIDBreakout = func() error {
 		return errors.New("hostPID breakout unavailable in smoke test")
 	}
+	launchHostPIDPtraceBreakout = func() error {
+		return errors.New("hostPID ptrace breakout unavailable in smoke test")
+	}
 	scanContainerEscapes = func() error {
 		return errors.New("container escape scan unavailable in smoke test")
 	}
@@ -80,6 +83,8 @@ func TestMainRunsSafeModulesFromMFlag(t *testing.T) {
 		{"24", "hostPID breakout unavailable in smoke test"},
 		{"host-pid-breakout", "hostPID breakout unavailable in smoke test"},
 		{"breakout-hostpid", "hostPID breakout unavailable in smoke test"},
+		{"hostpid-ptrace-breakout", "hostPID ptrace breakout unavailable in smoke test"},
+		{"32", "hostPID ptrace breakout unavailable in smoke test"},
 		{"container-escape-scan", "container escape scan unavailable in smoke test"},
 		{"25", "container escape scan unavailable in smoke test"},
 		{"escape-scan", "container escape scan unavailable in smoke test"},
@@ -196,7 +201,7 @@ func TestMainRunsMenuModulesWithoutTerminalInput(t *testing.T) {
 		"aws-enter-credentials", "aws-assume-role", "aws-s3-ls", "aws-s3-ls-objects",
 		"inject-and-exec", "attack-pod-hostpath-mount", "nodefs-steal-secrets", "bash", "sh",
 		"get-pods", "dump-pod-info", "find-volume-mounts", "list-secrets", "secret-to-sa",
-		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "container-escape-scan",
+		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "hostpid-ptrace-breakout", "container-escape-scan",
 		"docker-socket-breakout", "hostroot-breakout", "tcpscan", "enumerate-dns",
 		"aws-get-token", "attack-aws-kops-1", "gcp-attack-kops-1", "gcp-get-token", "gcp-attack-kube-env",
 	} {
@@ -237,7 +242,7 @@ func TestMainMenuCompletionIncludesEveryCanonicalModule(t *testing.T) {
 		"gcp-attack-kube-env", "attack-kops-gcs-1", "gcp-attack-kops-1",
 		"attack-kops-aws-1", "aws-attack-kops-1", "aws-s3-ls",
 		"aws-s3-ls-objects", "attack-pod-hostpath-mount", "exec-via-api",
-		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "container-escape-scan", "docker-socket-breakout",
+		"exec-via-kubelet", "leakyvessels", "hostpid-breakout", "hostpid-ptrace-breakout", "container-escape-scan", "docker-socket-breakout",
 		"hostroot-breakout", "nodefs-steal-secrets", "nodefs-secrets-list",
 		"inject-and-exec",
 		"kubectl", "kubectl-try-all", "kubectl-try-all-until-success", "curl",
@@ -294,7 +299,7 @@ func TestCanonicalModuleCommandsRemainUnchanged(t *testing.T) {
 		"get-pods", "dump-pod-info", "aws-enter-credentials", "aws-assume-role", "aws-empty-assumed-role",
 		"cert-menu", "list-secrets", "secret-to-sa", "find-volume-mounts", "attack-pod-hostpath-mount",
 		"aws-get-token", "gcp-get-token", "gcp-attack-kube-env", "gcp-attack-kops-1", "aws-attack-kops-1",
-		"aws-s3-ls", "aws-s3-ls-objects", "exec-via-api", "exec-via-kubelet", "leakyvessels", "hostpid-breakout",
+		"aws-s3-ls", "aws-s3-ls-objects", "exec-via-api", "exec-via-kubelet", "leakyvessels", "hostpid-breakout", "hostpid-ptrace-breakout",
 		"container-escape-scan", "docker-socket-breakout", "hostroot-breakout",
 		"nodefs-steal-secrets", "nodefs-secrets-list", "inject-and-exec", "curl", "set-auth-can-i", "tcpscan",
 		"enumerate-dns", "bash", "sh", "full", "short", "exit", "quit",

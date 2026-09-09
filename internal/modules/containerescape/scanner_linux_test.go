@@ -28,7 +28,7 @@ type fakeScannerSystem struct {
 }
 
 func newFakeScannerSystem() *fakeScannerSystem {
-	capabilities := uint64(1)<<uint(unix.CAP_SYS_ADMIN) | uint64(1)<<uint(unix.CAP_SYS_CHROOT)
+	capabilities := uint64(1)<<uint(unix.CAP_SYS_ADMIN) | uint64(1)<<uint(unix.CAP_SYS_CHROOT) | uint64(1)<<uint(unix.CAP_SYS_PTRACE)
 	system := &fakeScannerSystem{
 		environment: map[string]string{},
 		files: map[string][]byte{
@@ -124,6 +124,7 @@ func TestScanWithSystemFindsObservableCandidates(t *testing.T) {
 		TechniqueDockerSocket:  escapeutil.StatusCandidate,
 		TechniqueCgroupRelease: escapeutil.StatusCandidate,
 		TechniqueCorePattern:   escapeutil.StatusCandidate,
+		TechniqueHostPIDPtrace: escapeutil.StatusCandidate,
 	}
 	if len(findings) != len(want) {
 		t.Fatalf("finding count = %d, want %d: %#v", len(findings), len(want), findings)
@@ -164,6 +165,7 @@ func TestScanWithSystemFailsClosed(t *testing.T) {
 		TechniqueDockerSocket:  escapeutil.StatusBlocked,
 		TechniqueCgroupRelease: escapeutil.StatusUnsupported,
 		TechniqueCorePattern:   escapeutil.StatusBlocked,
+		TechniqueHostPIDPtrace: escapeutil.StatusBlocked,
 	}
 	for _, finding := range findings {
 		if finding.Status != want[finding.Technique] {
