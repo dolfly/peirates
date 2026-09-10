@@ -59,25 +59,26 @@ docker pull bustakube/alpine-peirates:v1.1.32
 
 However, if you want to build from source, read on!
 
-Get peirates
-
-    go get -v "github.com/inguardians/peirates"
-
-Get libary sources if you haven't already (Warning: this will take almost a
-gig of space because it needs the whole kubernetes repository)
-
-    go get -v "k8s.io/kubectl/pkg/cmd" "github.com/aws/aws-sdk-go"
-
-Build the executable
-
-    cd $GOPATH/github.com/inguardians/peirates
-    make
+    make build-amd64
+    make build-arm
+    make build-arm64
+    make build-86
 
 The default `build` target generates a statically linked Linux AMD64 executable
 named `peirates` in the repository root. You can also invoke it explicitly with
-`make build`. To build another single architecture without creating a
-distribution archive, use a target such as `make build-arm64`. The output still
-uses `BINARY` and defaults to `peirates` in the repository root.
+`make build`. 
+
+    make build
+
+To build another single architecture without creating a
+distribution archive, use a target like so:
+
+    make build-amd64
+    make build-arm
+    make build-arm64
+    make build-x86
+
+The output file's name uses `BINARY` and defaults to `peirates` in the repository root.
 
 Build compressed Linux distributions for AMD64, ARM, ARM64, and 386:
 
