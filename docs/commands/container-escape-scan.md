@@ -88,8 +88,8 @@ The scan emits one result for each reviewed technique:
   mount. This remains a kernel-global candidate rather than proof that the
   action will succeed or reach the intended host; and
 - `hostpid-ptrace-breakout`: effective UID 0, matching visible-PID-1 PID and
-  user namespaces, and effective `CAP_SYS_PTRACE` and `CAP_SYS_ADMIN`. An
-  explicit eligible disposable process must still be selected by the action.
+  user namespaces, and effective `CAP_SYS_PTRACE`. An explicit eligible
+  disposable process must still be selected by the action.
 
 The cgroup technique remains assessment-only. The core-pattern action is a
 separate, explicitly confirmed command; the scanner itself remains read-only

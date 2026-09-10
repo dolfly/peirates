@@ -24,14 +24,15 @@ This command requires:
 
 - Linux AMD64, effective UID 0, and a readable procfs;
 - the current PID and user namespaces to match visible PID 1;
-- effective `CAP_SYS_PTRACE` and `CAP_SYS_ADMIN` (`SYS_PTRACE` and `SYS_ADMIN`
-  in a Kubernetes security context);
+- effective `CAP_SYS_PTRACE` (`SYS_PTRACE` in a Kubernetes security context);
 - a kernel with `PTRACE_SEIZE`, fork/clone and exec tracing, and pidfds;
 - a target root containing executable `/bin/sh` and a working devpts mount;
   and
 - an explicitly selected, disposable, single-threaded root process that
   matches visible PID 1's PID, user, mount, UTS, IPC, network, cgroup, optional
   time, and filesystem-root identities.
+
+`CAP_SYS_ADMIN` is not required by this technique.
 
 PID 1, Peirates, its ancestors, kernel threads, multithreaded processes,
 already traced processes, nested PID-namespace processes, non-root processes,

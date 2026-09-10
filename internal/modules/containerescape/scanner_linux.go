@@ -123,15 +123,10 @@ func probeHostPIDPtrace(facts scanFacts) escapeutil.Finding {
 	if facts.statusErr != nil {
 		blockers = append(blockers, "effective capabilities could not be read")
 	} else {
-		for _, capability := range []struct {
-			name string
-			bit  int
-		}{{"CAP_SYS_PTRACE", unix.CAP_SYS_PTRACE}, {"CAP_SYS_ADMIN", unix.CAP_SYS_ADMIN}} {
-			if !escapeutil.HasCapability(facts.capabilities, capability.bit) {
-				blockers = append(blockers, capability.name+" is not effective")
-			} else {
-				finding.Evidence = append(finding.Evidence, capability.name+" is effective")
-			}
+		if !escapeutil.HasCapability(facts.capabilities, unix.CAP_SYS_PTRACE) {
+			blockers = append(blockers, "CAP_SYS_PTRACE is not effective")
+		} else {
+			finding.Evidence = append(finding.Evidence, "CAP_SYS_PTRACE is effective")
 		}
 	}
 	for _, namespace := range []string{"pid", "user"} {

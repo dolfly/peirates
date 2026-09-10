@@ -309,11 +309,11 @@ cluster. Override the name with `PEIRATES_HOSTPID_BREAKOUT_KIND_CLUSTER`.
 Run `make hostpid-ptrace-breakout-kind-test` to create a disposable Linux AMD64
 Kind cluster and exercise menu item 32 against only a uniquely marked root
 `sleep` process created by the test inside the Kind node. The runner pod uses
-`hostPID: true`, adds `SYS_PTRACE` and `SYS_ADMIN`, remains non-privileged, and
-uses the runtime-default seccomp profile. The test drives a harmless command
-through the PTY-backed interactive shell and exits it cleanly. It independently
-compares UID, hostname, working directory, and PID, mount, and UTS namespace
-identities with Docker-side observations.
+`hostPID: true`, drops every default capability, adds only `SYS_PTRACE`, remains
+non-privileged, and uses the runtime-default seccomp profile. The test drives a
+harmless command through the PTY-backed interactive shell and exits it cleanly.
+It independently compares UID, hostname, working directory, and PID, mount,
+and UTS namespace identities with Docker-side observations.
 
 The harness verifies that the original target retains the same PID, start
 time, executable, and command line after detach and that no injected shell

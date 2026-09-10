@@ -58,7 +58,7 @@ func probePlatform(ctx context.Context) (ProbeResult, error) {
 	if !selfStatus.hasCapEff {
 		return ProbeResult{}, errors.New("CapEff is missing from /proc/self/status")
 	}
-	if err := requirePtraceCapabilities(selfStatus.capEff); err != nil {
+	if err := requirePtraceCapability(selfStatus.capEff); err != nil {
 		return ProbeResult{}, err
 	}
 	for _, namespace := range []string{"pid", "user"} {
@@ -308,18 +308,9 @@ func processMetadataReason(status processStatus, taskCount int, executable strin
 	return "", ""
 }
 
-func requirePtraceCapabilities(capabilities uint64) error {
-	var missing []string
-	for _, capability := range []struct {
-		name string
-		bit  int
-	}{{"CAP_SYS_PTRACE", unix.CAP_SYS_PTRACE}, {"CAP_SYS_ADMIN", unix.CAP_SYS_ADMIN}} {
-		if capabilities&(uint64(1)<<uint(capability.bit)) == 0 {
-			missing = append(missing, capability.name)
-		}
-	}
-	if len(missing) != 0 {
-		return fmt.Errorf("required effective capabilities are missing: %s", strings.Join(missing, ", "))
+func requirePtraceCapability(capabilities uint64) error {
+	if capabilities&(uint64(1)<<uint(unix.CAP_SYS_PTRACE)) == 0 {
+		return errors.New("required effective capability is missing: CAP_SYS_PTRACE")
 	}
 	return nil
 }

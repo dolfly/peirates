@@ -112,17 +112,11 @@ func TestProhibitedTargetRejection(t *testing.T) {
 	}
 }
 
-func TestRequirePtraceCapabilities(t *testing.T) {
-	both := uint64(1)<<uint(unix.CAP_SYS_PTRACE) | uint64(1)<<uint(unix.CAP_SYS_ADMIN)
-	if err := requirePtraceCapabilities(both); err != nil {
+func TestRequirePtraceCapability(t *testing.T) {
+	if err := requirePtraceCapability(uint64(1) << uint(unix.CAP_SYS_PTRACE)); err != nil {
 		t.Fatal(err)
 	}
-	for _, test := range []struct {
-		capabilities uint64
-		want         string
-	}{{uint64(1) << uint(unix.CAP_SYS_ADMIN), "CAP_SYS_PTRACE"}, {uint64(1) << uint(unix.CAP_SYS_PTRACE), "CAP_SYS_ADMIN"}, {0, "CAP_SYS_PTRACE, CAP_SYS_ADMIN"}} {
-		if err := requirePtraceCapabilities(test.capabilities); err == nil || !strings.Contains(err.Error(), test.want) {
-			t.Fatalf("capabilities %#x error = %v, want %q", test.capabilities, err, test.want)
-		}
+	if err := requirePtraceCapability(uint64(1) << uint(unix.CAP_SYS_ADMIN)); err == nil || !strings.Contains(err.Error(), "CAP_SYS_PTRACE") {
+		t.Fatalf("missing CAP_SYS_PTRACE error = %v", err)
 	}
 }

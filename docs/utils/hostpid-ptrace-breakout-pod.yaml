@@ -33,6 +33,6 @@ spec:
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
-        add: ["SYS_PTRACE", "SYS_ADMIN"]
+        add: ["SYS_PTRACE"]
       seccompProfile:
         type: RuntimeDefault

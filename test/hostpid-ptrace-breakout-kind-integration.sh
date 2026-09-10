@@ -6,7 +6,7 @@
 # - Linux AMD64 static build and numeric/canonical command routing
 # - one interactive PTY shell at visible PID 1's Kind-node boundary
 # - byte-for-byte target identity survival and pidfd child cleanup
-# - missing capabilities, private PID, non-boundary, multithreaded, PID 1,
+# - missing CAP_SYS_PTRACE, private PID, non-boundary, multithreaded, PID 1,
 #   wrong-confirmation, target-exit, and clean-shell-exit controls
 #
 # Kind cannot establish an outside-all-containers physical-host claim. This
@@ -24,7 +24,6 @@ node_name="${cluster_name}-control-plane"
 namespace="peirates-hostpid-ptrace-test"
 runner="ptrace-runner"
 no_ptrace="ptrace-no-sys-ptrace"
-no_admin="ptrace-no-sys-admin"
 private_pid="ptrace-private-pid"
 nested_target="ptrace-nested-target"
 marker="peirates-ptrace-$RANDOM-$RANDOM"
@@ -183,7 +182,8 @@ spec:
       runAsUser: 0
       allowPrivilegeEscalation: false
       capabilities:
-        add: ["SYS_PTRACE", "SYS_ADMIN"]
+        drop: ["ALL"]
+        add: ["SYS_PTRACE"]
       seccompProfile:
         type: RuntimeDefault
 ---
@@ -201,23 +201,7 @@ spec:
     securityContext:
       runAsUser: 0
       capabilities:
-        add: ["SYS_ADMIN"]
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ${no_admin}
-spec:
-  hostPID: true
-  automountServiceAccountToken: false
-  containers:
-  - name: test
-    image: busybox:1.36.1
-    command: ["sh", "-c", "sleep 3600"]
-    securityContext:
-      runAsUser: 0
-      capabilities:
-        add: ["SYS_PTRACE"]
+        drop: ["ALL"]
 ---
 apiVersion: v1
 kind: Pod
@@ -232,7 +216,8 @@ spec:
     securityContext:
       runAsUser: 0
       capabilities:
-        add: ["SYS_PTRACE", "SYS_ADMIN"]
+        drop: ["ALL"]
+        add: ["SYS_PTRACE"]
 ---
 apiVersion: v1
 kind: Pod
@@ -249,7 +234,7 @@ spec:
 PODS
 kubectl --context "${context}" -n "${namespace}" wait --for=condition=Ready pod --all --timeout=120s
 
-for pod in "${runner}" "${no_ptrace}" "${no_admin}" "${private_pid}"; do
+for pod in "${runner}" "${no_ptrace}" "${private_pid}"; do
     kubectl --context "${context}" -n "${namespace}" cp "${peirates_binary}" "${pod}:/tmp/peirates"
     kubectl --context "${context}" -n "${namespace}" exec "${pod}" -- chmod 0755 /tmp/peirates
 done
@@ -295,7 +280,6 @@ run_positive hostpid-ptrace-breakout
 # Capability and private-PID controls must fail during read-only preflight.
 for record in \
     "${no_ptrace}:CAP_SYS_PTRACE" \
-    "${no_admin}:CAP_SYS_ADMIN" \
     "${private_pid}:no eligible disposable host process"; do
     IFS=: read -r pod expected <<<"${record}"
     output="$(timeout 60s kubectl --context "${context}" -n "${namespace}" exec "${pod}" -- \

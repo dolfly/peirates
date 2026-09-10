@@ -8,7 +8,9 @@ shell passed both the Linux AMD64 test against a test-owned disposable process
 and the full disposable Kind mechanics test, including both dispatch forms,
 namespace evidence, target preservation, negative controls, and cleanup. The
 interactive design below supersedes the original command-capture, timeout, and
-output-file design. Do not claim an outside-all-containers breakout until the
+output-file design. On 2026-09-09, the Kind mechanics test passed again after
+the runner dropped every default capability and added back only
+`CAP_SYS_PTRACE`. Do not claim an outside-all-containers breakout until the
 independent-kernel VM gate passes.
 
 ## Goal
@@ -16,8 +18,8 @@ independent-kernel VM gate passes.
 Add an experimental Peirates command that opens an interactive shell in the
 namespaces, credentials, and filesystem context of an explicitly selected root
 process visible from a `hostPID: true` container. The intended Kubernetes
-container is root, shares the node PID namespace, and has `SYS_PTRACE` and
-`SYS_ADMIN` in its container capability list.
+container is root, shares the node PID namespace, and has `SYS_PTRACE` in its
+container capability list. `SYS_ADMIN` is not required.
 
 The canonical command is `hostpid-ptrace-breakout`, assigned to menu item `32`
 with no aliases.
@@ -59,14 +61,12 @@ spec:
         capabilities:
           add:
             - SYS_PTRACE
-            - SYS_ADMIN
 ```
 
 `CAP_SYS_PTRACE` authorizes tracing arbitrary processes and protected procfs
-access. `CAP_SYS_ADMIN` remains an explicit eligibility requirement because it
-is part of the requested scenario, but the engine must not use it to fall back
-to `setns`, mount, or chroot behavior. Capabilities are evaluated relative to
-user namespaces; a capability held only in a nested user namespace is
+access. The engine does not require `CAP_SYS_ADMIN` and does not use `setns`,
+mount, or chroot behavior. Capabilities are evaluated relative to user
+namespaces; `CAP_SYS_PTRACE` held only in a nested user namespace is
 insufficient.
 
 Primary references:
@@ -113,9 +113,9 @@ Before listing a candidate, compare it with visible PID 1 for:
 - PID namespace depth.
 
 The current process and visible PID 1 must share PID and user namespaces.
-Peirates must also be effective UID 0 with `CAP_SYS_PTRACE` and
-`CAP_SYS_ADMIN`. Yama `ptrace_scope=3` is a hard failure; other seccomp and LSM
-restrictions are reported as warnings and may reject the actual attach.
+Peirates must also be effective UID 0 with `CAP_SYS_PTRACE`. Yama
+`ptrace_scope=3` is a hard failure; other seccomp and LSM restrictions are
+reported as warnings and may reject the actual attach.
 
 ## Candidate eligibility
 
@@ -304,8 +304,8 @@ The disposable Linux AMD64 Kind test must:
 3. create a uniquely marked, bounded root `sleep` in the Kind node;
 4. record its PID, start time, executable, command line, and namespaces from
    Docker;
-5. run a non-privileged `hostPID: true` pod with only `SYS_PTRACE` and
-   `SYS_ADMIN` added and runtime-default seccomp;
+5. run a non-privileged `hostPID: true` pod with all default capabilities
+   dropped, only `SYS_PTRACE` added, and runtime-default seccomp;
 6. drive the interactive shell with a random marker command and `exit` through
    both numeric and canonical dispatch;
 7. independently compare UID, hostname, working directory, and namespace
@@ -342,8 +342,8 @@ git diff --check
 ## Acceptance criteria
 
 - Linux AMD64 only; static AMD64 build succeeds.
-- Effective UID 0, `CAP_SYS_PTRACE`, `CAP_SYS_ADMIN`, hostPID visibility, and a
-  compatible user namespace are required.
+- Effective UID 0, `CAP_SYS_PTRACE`, hostPID visibility, and a compatible user
+  namespace are required; `CAP_SYS_ADMIN` is not required.
 - PID 1 and unsafe target classes are rejected; no target is auto-selected.
 - Exact PID-specific confirmation is required.
 - A verified target-root PTY backs `/bin/sh -i`.

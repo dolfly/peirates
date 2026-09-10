@@ -174,6 +174,22 @@ func TestScanWithSystemFailsClosed(t *testing.T) {
 	}
 }
 
+func TestHostPIDPtraceDoesNotRequireSysAdmin(t *testing.T) {
+	system := newFakeScannerSystem()
+	system.files[procSelfStatus] = []byte(fmt.Sprintf(
+		"Name:\tpeirates\nUid:\t0\t0\t0\t0\nCapEff:\t%016x\n",
+		uint64(1)<<uint(unix.CAP_SYS_PTRACE),
+	))
+	finding := probeHostPIDPtrace(collectFacts(system))
+	if finding.Status != escapeutil.StatusCandidate {
+		t.Fatalf("finding = %#v", finding)
+	}
+	joined := strings.Join(finding.Evidence, "\n")
+	if !strings.Contains(joined, "CAP_SYS_PTRACE is effective") || strings.Contains(joined, "CAP_SYS_ADMIN") {
+		t.Fatalf("unexpected capability evidence:\n%s", joined)
+	}
+}
+
 func TestDockerProbeRejectsSymlinkAndNonSocket(t *testing.T) {
 	system := newFakeScannerSystem()
 	system.environment["DOCKER_HOST"] = "unix:///symlink.sock"
