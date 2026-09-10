@@ -47,6 +47,12 @@ build:
 	chmod 755 $(BINARY)
 	@echo "Final executable at $(abspath $(BINARY))"
 
+build-%: FORCE
+	@echo "Building for Linux on $*..."
+	$(STATIC_BUILD_ENV) GOOS=linux GOARCH=$* GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) go build $(STATIC_BUILD_FLAGS) -o $(BINARY) $(BUILD_PACKAGE)
+	chmod 755 $(BINARY)
+	@echo "Final executable at $(abspath $(BINARY))"
+
 dist: $(DIST_TARGETS)
 
 dist-%: FORCE

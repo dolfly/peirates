@@ -75,7 +75,9 @@ Build the executable
 
 The default `build` target generates a statically linked Linux AMD64 executable
 named `peirates` in the repository root. You can also invoke it explicitly with
-`make build`.
+`make build`. To build another single architecture without creating a
+distribution archive, use a target such as `make build-arm64`. The output still
+uses `BINARY` and defaults to `peirates` in the repository root.
 
 Build compressed Linux distributions for AMD64, ARM, ARM64, and 386:
 
