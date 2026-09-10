@@ -49,10 +49,10 @@ see the [main menu command reference](docs/commands/README.md).
 
 You can find a useful [alpine-peirates container image on Docker Hub](https://hub.docker.com/r/bustakube/alpine-peirates), with a version number tag that tracks the Peirates version.
 
-For example, for `alpine-peirates:v1.1.27d`, which contains peirates version `v1.1.27d`, run:
+For example, for `alpine-peirates:v1.1.32`, which contains peirates version `v1.1.32`, run:
 
 ```shell
-docker pull bustakube/alpine-peirates:v1.1.27d
+docker pull bustakube/alpine-peirates:v1.1.32
 ```
 
 ## Building Peirates
